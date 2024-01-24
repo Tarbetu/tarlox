@@ -53,6 +53,8 @@ fn run_prompt() {
             println!("{e}\n");
         };
 
+        input.clear();
+
         print!("Tarbetu's Lox>> ");
         Write::flush(&mut stdout).expect("Can't flush stdout!");
     }

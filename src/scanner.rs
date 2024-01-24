@@ -164,7 +164,7 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        self.add_token(TokenType::String(string))
+        self.add_token(TokenType::LoxString(string))
     }
 
     fn number(&mut self, first_digit: char) {
@@ -221,5 +221,102 @@ impl<'a> Scanner<'a> {
         };
 
         self.add_token(token_type)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use TokenType::*;
+
+    fn get_tokens(source: &'static str) -> Result<Vec<Token>, LoxError<'static>> {
+        Scanner::new(source).scan_tokens()
+    }
+
+    fn convert_tokens_into_token_types(tokens: Vec<Token>) -> Vec<TokenType> {
+        tokens
+            .into_iter()
+            .map(|token| token.kind)
+            .collect::<Vec<_>>()
+    }
+
+    fn test_scanner(source: &'static str, mut excepted_tokens: Vec<TokenType>) {
+        let tokens = get_tokens(source);
+
+        excepted_tokens.push(EOF);
+
+        assert_eq!(
+            excepted_tokens,
+            convert_tokens_into_token_types(tokens.unwrap())
+        )
+    }
+
+    #[test]
+    fn test_sum() {
+        test_scanner("2 + 2", vec![Number(2), Plus, Number(2)])
+    }
+
+    #[test]
+    fn test_grouping() {
+        test_scanner("()", vec![LeftParen, RightParen])
+    }
+
+    #[test]
+    fn test_grouping_with_sum() {
+        test_scanner(
+            "(2 + 2)",
+            vec![LeftParen, Number(2), Plus, Number(2), RightParen],
+        )
+    }
+
+    #[test]
+    fn test_identifier() {
+        test_scanner(
+            "tarbetu_is_best",
+            vec![Identifier(String::from("tarbetu_is_best"))],
+        )
+    }
+
+    #[should_panic]
+    #[test]
+    fn wrong_identifier_with_unicode() {
+        test_scanner("tarbetü", vec![Identifier(String::from("tarbetü"))])
+    }
+
+    #[test]
+    fn test_number_with_identifier() {
+        test_scanner("222a", vec![Number(222), Identifier(String::from("a"))])
+    }
+
+    #[test]
+    fn test_string() {
+        test_scanner(
+            r#""This is a cool string""#,
+            vec![LoxString(String::from("This is a cool string"))],
+        )
+    }
+
+    #[test]
+    fn test_grouped_string() {
+        test_scanner(
+            r#"("This is a cool string"s)"#,
+            vec![
+                LeftParen,
+                LoxString(String::from("This is a cool string")),
+                Identifier(String::from('s')),
+                RightParen,
+            ],
+        )
+    }
+
+    #[test]
+    fn test_identifier_with_string() {
+        test_scanner(
+            r#"test"Best String!""#,
+            vec![
+                Identifier(String::from("test")),
+                Identifier(String::from("Best String!")),
+            ],
+        )
     }
 }

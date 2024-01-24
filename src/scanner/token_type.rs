@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     LeftParen,
     RightParen,
@@ -23,7 +23,7 @@ pub enum TokenType {
     // literals,
     // Make them reference to avoid allocation
     Identifier(String),
-    String(String),
+    LoxString(String),
     Number(usize),
     // keywords,
     And,
