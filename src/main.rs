@@ -59,11 +59,11 @@ fn run_prompt() {
 }
 
 fn run(code: &str) -> LoxResult<()> {
-    let mut scanner = Scanner::new(code);
-    let tokens = scanner.scan_tokens()?;
+    let tokens = Scanner::new(code).scan_tokens()?;
 
     for token in tokens {
-        print!("{token}");
+        print!("{token}  ");
     }
+    println!();
     Ok(())
 }
