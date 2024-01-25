@@ -171,13 +171,19 @@ impl<'a> Scanner<'a> {
         let mut string = String::from(first_digit);
 
         loop {
-            let next_char = self.chars.next();
-
-            match next_char {
-                Some('.') if self.chars.peek().is_some_and(|&c| c.is_ascii_digit()) => {
-                    string.push('.')
+            match self.chars.peek() {
+                Some(x) if x.is_ascii_digit() => string.push(self.chars.next().unwrap()),
+                Some('.') => {
+                    if let Some('.') = self.chars.next() {
+                        if self.chars.peek().is_some_and(|c| c.is_ascii_digit()) {
+                            string.push('.');
+                            string.push(self.chars.next().unwrap())
+                        } else {
+                            self.add_token(TokenType::Dot);
+                            break;
+                        }
+                    }
                 }
-                Some(x) if x.is_ascii_digit() => string.push(x),
                 None | Some(_) => break,
             }
         }
@@ -189,10 +195,10 @@ impl<'a> Scanner<'a> {
         let mut string = String::from(first_digit);
 
         loop {
-            let next_char = self.chars.next();
-
-            match next_char {
-                Some(char) if char.is_ascii_alphanumeric() => string.push(char),
+            match self.chars.peek() {
+                Some(char) if char.is_ascii_alphanumeric() || *char == '_' => {
+                    string.push(self.chars.next().unwrap())
+                }
                 None | Some(_) => break,
             }
         }
@@ -227,6 +233,7 @@ impl<'a> Scanner<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use astro_float::BigFloat;
     use TokenType::*;
 
     fn get_tokens(source: &'static str) -> Result<Vec<Token>, LoxError<'static>> {
@@ -253,7 +260,26 @@ mod tests {
 
     #[test]
     fn test_sum() {
-        test_scanner("2 + 2", vec![Number(2), Plus, Number(2)])
+        test_scanner(
+            "2 + 2",
+            vec![
+                Number(BigFloat::from(2.0)),
+                Plus,
+                Number(BigFloat::from(2.0)),
+            ],
+        )
+    }
+
+    #[test]
+    fn test_float_sum() {
+        test_scanner(
+            "2.5 + 2.5",
+            vec![
+                Number(BigFloat::from(2.5)),
+                Plus,
+                Number(BigFloat::from(2.5)),
+            ],
+        )
     }
 
     #[test]
@@ -265,7 +291,27 @@ mod tests {
     fn test_grouping_with_sum() {
         test_scanner(
             "(2 + 2)",
-            vec![LeftParen, Number(2), Plus, Number(2), RightParen],
+            vec![
+                LeftParen,
+                Number(BigFloat::from(2.0)),
+                Plus,
+                Number(BigFloat::from(2.0)),
+                RightParen,
+            ],
+        )
+    }
+
+    #[test]
+    fn test_grouping_float_sum() {
+        test_scanner(
+            "(2.5 + 2.5)",
+            vec![
+                LeftParen,
+                Number(BigFloat::from(2.5)),
+                Plus,
+                Number(BigFloat::from(2.5)),
+                RightParen,
+            ],
         )
     }
 
@@ -285,7 +331,10 @@ mod tests {
 
     #[test]
     fn test_number_with_identifier() {
-        test_scanner("222a", vec![Number(222), Identifier(String::from("a"))])
+        test_scanner(
+            "222a",
+            vec![Number(BigFloat::from(222.0)), Identifier(String::from("a"))],
+        )
     }
 
     #[test]
@@ -297,7 +346,7 @@ mod tests {
     }
 
     #[test]
-    fn test_grouped_string() {
+    fn test_grouped_string_with_postfix() {
         test_scanner(
             r#"("This is a cool string"s)"#,
             vec![
@@ -315,8 +364,13 @@ mod tests {
             r#"test"Best String!""#,
             vec![
                 Identifier(String::from("test")),
-                Identifier(String::from("Best String!")),
+                LoxString(String::from("Best String!")),
             ],
         )
+    }
+
+    #[test]
+    fn test_for_keyword() {
+        test_scanner("for", vec![For])
     }
 }

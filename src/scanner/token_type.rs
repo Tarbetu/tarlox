@@ -1,3 +1,5 @@
+use astro_float::BigFloat;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     LeftParen,
@@ -24,7 +26,7 @@ pub enum TokenType {
     // Make them reference to avoid allocation
     Identifier(String),
     LoxString(String),
-    Number(usize),
+    Number(BigFloat),
     // keywords,
     And,
     Class,
