@@ -1,8 +1,8 @@
 mod token;
 mod token_type;
 
-use token::Token;
-use token_type::TokenType;
+pub use token::Token;
+pub use token_type::TokenType;
 
 use std::iter::Peekable;
 use std::str::Chars;

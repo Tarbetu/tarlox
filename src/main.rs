@@ -1,8 +1,10 @@
 mod errors;
 mod scanner;
+mod syntax;
 
 pub use crate::errors::LoxError;
 pub use crate::errors::LoxResult;
+pub use crate::scanner::{Token, TokenType};
 use scanner::Scanner;
 use std::io;
 use std::io::Write;
@@ -67,5 +69,6 @@ fn run(code: &str) -> LoxResult<()> {
         print!("{token}  ");
     }
     println!();
+
     Ok(())
 }

@@ -8,6 +8,6 @@ pub struct Token {
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?} {}", self.kind, self.line)
+        write!(f, "[{}]{:?}", self.line, self.kind)
     }
 }
