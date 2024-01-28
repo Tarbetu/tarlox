@@ -10,6 +10,7 @@ pub enum LoxError<'a> {
     UnexceptedCharacter { line: usize, character: char },
     RuntimeError { line: usize, place: &'a str },
     UnterminatedString,
+    InternalParsingError(&'a str),
     Other(String),
 }
 
@@ -28,6 +29,7 @@ impl Display for LoxError<'_> {
             UnterminatedString => {
                 write!(f, "[Lox Error: Unterminated String]")
             }
+            InternalParsingError(msg) => write!(f, "[Internal Error: Can't parsed! {msg}]"),
             Other(txt) => write!(f, "[Unexcepted Error from io::Error - {txt}]"),
         }
     }
