@@ -73,7 +73,7 @@ pub enum Operator {
 
 // Not your best solution
 impl TryInto<Operator> for &Token {
-    type Error = LoxError<'static>;
+    type Error = LoxError;
 
     fn try_into(self) -> Result<Operator, Self::Error> {
         match self.kind {

@@ -17,7 +17,7 @@ use crate::{LoxError, LoxResult};
 // Anyway, Peakable is so cool.
 pub struct Scanner<'a> {
     chars: Peekable<Chars<'a>>,
-    tokens: LoxResult<'a, Vec<Token>>,
+    tokens: LoxResult<Vec<Token>>,
     line: usize,
 }
 
@@ -30,7 +30,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_tokens(mut self) -> LoxResult<'a, Vec<Token>> {
+    pub fn scan_tokens(mut self) -> LoxResult<Vec<Token>> {
         while self.chars.peek().is_some() {
             self.scan_token();
 
@@ -237,7 +237,7 @@ mod tests {
     use astro_float::BigFloat;
     use TokenType::*;
 
-    fn get_tokens(source: &'static str) -> Result<Vec<Token>, LoxError<'static>> {
+    fn get_tokens(source: &'static str) -> LoxResult<Vec<Token>> {
         Scanner::new(source).scan_tokens()
     }
 

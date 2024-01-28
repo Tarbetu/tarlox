@@ -4,17 +4,28 @@ use std::{
     io::{self},
 };
 
+// We use static because this enum created while interpreter terminated
 #[derive(Debug, Clone)]
-pub enum LoxError<'a> {
+pub enum LoxError {
     FileError,
-    UnexceptedCharacter { line: usize, character: char },
-    RuntimeError { line: usize, place: &'a str },
+    UnexceptedCharacter {
+        line: usize,
+        character: char,
+    },
+    ParseError {
+        line: Option<usize>,
+        msg: &'static str,
+    },
+    RuntimeError {
+        line: Option<usize>,
+        msg: &'static str,
+    },
     UnterminatedString,
-    InternalParsingError(&'a str),
+    InternalParsingError(&'static str),
     Other(String),
 }
 
-impl Display for LoxError<'_> {
+impl Display for LoxError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use self::LoxError::*;
 
@@ -23,8 +34,19 @@ impl Display for LoxError<'_> {
             UnexceptedCharacter { line, character } => {
                 write!(f, "[Lox Error: Unexcepted {character} at {line}]")
             }
-            RuntimeError { line, place } => {
-                write!(f, "[Runtime Error: Error on {} in {}]", line, place)
+            RuntimeError { line, msg } => {
+                if let Some(l) = line {
+                    write!(f, "[Runtime Error: Error at {}. {}]", l, msg)
+                } else {
+                    write!(f, "[Runtime Error: Error at end. {}]", msg)
+                }
+            }
+            ParseError { line, msg } => {
+                if let Some(l) = line {
+                    write!(f, "[Parse Error: Error at {}. {}]", l, msg)
+                } else {
+                    write!(f, "[Parse Error: Error at end. {}]", msg)
+                }
             }
             UnterminatedString => {
                 write!(f, "[Lox Error: Unterminated String]")
@@ -35,7 +57,7 @@ impl Display for LoxError<'_> {
     }
 }
 
-impl From<io::Error> for LoxError<'_> {
+impl From<io::Error> for LoxError {
     fn from(error: io::Error) -> Self {
         use io::ErrorKind::*;
 

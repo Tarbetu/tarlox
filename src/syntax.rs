@@ -15,13 +15,13 @@ struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    fn expression(self) -> LoxResult<'a, Expression> {
+    fn expression(self) -> LoxResult<Expression> {
         self.equality()
     }
 
     // These methods can be handled via macros
 
-    fn equality(mut self) -> LoxResult<'a, Expression> {
+    fn equality(mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
         let mut expr = self.comparison()?;
@@ -35,7 +35,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn comparison(mut self) -> LoxResult<'a, Expression> {
+    fn comparison(mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
         let mut expr = self.term()?;
@@ -49,7 +49,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn term(mut self) -> LoxResult<'a, Expression> {
+    fn term(mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
         let mut expr = self.factor()?;
@@ -64,7 +64,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn factor(mut self) -> LoxResult<'a, Expression> {
+    fn factor(mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
         let mut expr = self.unary()?;
@@ -79,7 +79,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn unary(mut self) -> LoxResult<'a, Expression> {
+    fn unary(mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
         if self.is_match(&[Bang, Minus]) {
@@ -92,7 +92,7 @@ impl<'a> Parser<'a> {
         self.primary()
     }
 
-    fn primary(mut self) -> LoxResult<'a, Expression> {
+    fn primary(mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
         if self.is_match(&[False]) {
@@ -120,14 +120,24 @@ impl<'a> Parser<'a> {
         }
         if self.is_match(&[LeftParen]) {
             let expr = self.expression()?;
-            self.consume(RightParen, "Excepted ')' after expression");
+            self.consume(RightParen)?;
             return Ok(Expression::Grouping(Box::new(expr)));
         }
 
         unreachable!()
     }
 
-    fn consume(&mut self, token_type: TokenType, msg: &str) {}
+    fn consume(&mut self, token_type: TokenType) -> LoxResult<()> {
+        if self.check(&token_type) {
+            self.current += 1;
+            return Ok(());
+        };
+
+        Err(LoxError::ParseError {
+            line: self.peek().map(|token| token.line),
+            msg: "Unmatched left paren",
+        })
+    }
 
     fn is_match(&mut self, token_types: &[TokenType]) -> bool {
         token_types
