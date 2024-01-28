@@ -1,12 +1,12 @@
 pub mod expression;
 
+use crate::LoxError;
 use crate::LoxResult;
 use crate::Token;
 use crate::TokenType;
 use astro_float::BigFloat;
 use expression::Expression;
 use expression::LoxLiteral;
-use expression::Operator;
 
 #[derive(Debug, Copy, Clone)]
 struct Parser<'a> {
@@ -67,7 +67,7 @@ impl<'a> Parser<'a> {
     fn factor(mut self) -> LoxResult<'a, Expression> {
         use TokenType::*;
 
-        let mut expr = self.factor()?;
+        let mut expr = self.unary()?;
 
         while self.is_match(&[Slash, Star]) {
             let operator = self.previous().try_into()?;
@@ -101,16 +101,33 @@ impl<'a> Parser<'a> {
         if self.is_match(&[True]) {
             return Ok(Expression::Literal(LoxLiteral::Bool(true)));
         }
-        if self.is_match(&[Number(BigFloat::new(0))]) {
-            unimplemented!();
+        if self.is_match(&[Nil]) {
+            return Ok(Expression::Literal(LoxLiteral::Nil));
+        }
+        if self.is_match(&[Number(BigFloat::new(0).into())]) {
+            let num = match self.previous().kind.clone() {
+                Number(x) => x,
+                _ => return Err(LoxError::InternalParsingError("Error while parsing Number")),
+            };
+            return Ok(Expression::Literal(LoxLiteral::Number(num)));
+        }
+        if self.is_match(&[LoxString(String::new().into())]) {
+            let str = match self.previous().kind.clone() {
+                LoxString(s) => s,
+                _ => return Err(LoxError::InternalParsingError("Error while parsing String")),
+            };
+            return Ok(Expression::Literal(LoxLiteral::LoxString(str)));
+        }
+        if self.is_match(&[LeftParen]) {
+            let expr = self.expression()?;
+            self.consume(RightParen, "Excepted ')' after expression");
+            return Ok(Expression::Grouping(Box::new(expr)));
         }
 
-        if self.is_match(&[LoxString(String::new())]) {
-            unimplemented!();
-        }
-
-        unimplemented!()
+        unreachable!()
     }
+
+    fn consume(&mut self, token_type: TokenType, msg: &str) {}
 
     fn is_match(&mut self, token_types: &[TokenType]) -> bool {
         token_types

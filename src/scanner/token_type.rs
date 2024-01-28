@@ -1,4 +1,5 @@
 use astro_float::BigFloat;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
@@ -23,10 +24,9 @@ pub enum TokenType {
     Less,
     LessEqual,
     // literals,
-    // Make them reference to avoid allocation
-    Identifier(String),
-    LoxString(String),
-    Number(BigFloat),
+    Identifier(Rc<String>),
+    LoxString(Rc<String>),
+    Number(Rc<BigFloat>),
     // keywords,
     And,
     Class,

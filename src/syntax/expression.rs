@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::rc::Rc;
 
 use astro_float::BigFloat;
 
@@ -36,8 +37,8 @@ impl Display for Expression {
 #[derive(Debug)]
 pub enum LoxLiteral {
     Nil,
-    Number(BigFloat),
-    LoxString(String),
+    Number(Rc<BigFloat>),
+    LoxString(Rc<String>),
     Bool(bool),
 }
 

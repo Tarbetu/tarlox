@@ -5,6 +5,7 @@ pub use token::Token;
 pub use token_type::TokenType;
 
 use std::iter::Peekable;
+use std::rc::Rc;
 use std::str::Chars;
 
 use crate::{LoxError, LoxResult};
@@ -164,7 +165,7 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        self.add_token(TokenType::LoxString(string))
+        self.add_token(TokenType::LoxString(Rc::new(string)))
     }
 
     fn number(&mut self, first_digit: char) {
@@ -188,7 +189,7 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        self.add_token(TokenType::Number(string.parse().unwrap()))
+        self.add_token(TokenType::Number(Rc::new(string.parse().unwrap())))
     }
 
     fn identifier(&mut self, first_digit: char) {
@@ -222,7 +223,7 @@ impl<'a> Scanner<'a> {
                 "true" => True,
                 "var" => Var,
                 "while" => While,
-                _ => Identifier(string),
+                _ => Identifier(Rc::new(string)),
             }
         };
 
@@ -263,9 +264,9 @@ mod tests {
         test_scanner(
             "2 + 2",
             vec![
-                Number(BigFloat::from(2.0)),
+                Number(Rc::new(BigFloat::from(2.0))),
                 Plus,
-                Number(BigFloat::from(2.0)),
+                Number(Rc::new(BigFloat::from(2.0))),
             ],
         )
     }
@@ -275,9 +276,9 @@ mod tests {
         test_scanner(
             "2.5 + 2.5",
             vec![
-                Number(BigFloat::from(2.5)),
+                Number(Rc::new(BigFloat::from(2.5))),
                 Plus,
-                Number(BigFloat::from(2.5)),
+                Number(Rc::new(BigFloat::from(2.5))),
             ],
         )
     }
@@ -293,9 +294,9 @@ mod tests {
             "(2 + 2)",
             vec![
                 LeftParen,
-                Number(BigFloat::from(2.0)),
+                Number(Rc::new(BigFloat::from(2.0))),
                 Plus,
-                Number(BigFloat::from(2.0)),
+                Number(Rc::new(BigFloat::from(2.0))),
                 RightParen,
             ],
         )
@@ -307,9 +308,9 @@ mod tests {
             "(2.5 + 2.5)",
             vec![
                 LeftParen,
-                Number(BigFloat::from(2.5)),
+                Number(Rc::new(BigFloat::from(2.5))),
                 Plus,
-                Number(BigFloat::from(2.5)),
+                Number(Rc::new(BigFloat::from(2.5))),
                 RightParen,
             ],
         )
@@ -319,21 +320,27 @@ mod tests {
     fn test_identifier() {
         test_scanner(
             "tarbetu_is_best",
-            vec![Identifier(String::from("tarbetu_is_best"))],
+            vec![Identifier(Rc::new(String::from("tarbetu_is_best")))],
         )
     }
 
     #[should_panic]
     #[test]
     fn wrong_identifier_with_unicode() {
-        test_scanner("tarbetü", vec![Identifier(String::from("tarbetü"))])
+        test_scanner(
+            "tarbetü",
+            vec![Identifier(Rc::new(String::from("tarbetü")))],
+        )
     }
 
     #[test]
     fn test_number_with_identifier() {
         test_scanner(
             "222a",
-            vec![Number(BigFloat::from(222.0)), Identifier(String::from("a"))],
+            vec![
+                Number(Rc::new(BigFloat::from(222.0))),
+                Identifier(Rc::new(String::from("a"))),
+            ],
         )
     }
 
@@ -341,7 +348,7 @@ mod tests {
     fn test_string() {
         test_scanner(
             r#""This is a cool string""#,
-            vec![LoxString(String::from("This is a cool string"))],
+            vec![LoxString(Rc::new(String::from("This is a cool string")))],
         )
     }
 
@@ -351,8 +358,8 @@ mod tests {
             r#"("This is a cool string"s)"#,
             vec![
                 LeftParen,
-                LoxString(String::from("This is a cool string")),
-                Identifier(String::from('s')),
+                LoxString(Rc::new(String::from("This is a cool string"))),
+                Identifier(Rc::new(String::from('s'))),
                 RightParen,
             ],
         )
@@ -363,8 +370,8 @@ mod tests {
         test_scanner(
             r#"test"Best String!""#,
             vec![
-                Identifier(String::from("test")),
-                LoxString(String::from("Best String!")),
+                Identifier(Rc::new(String::from("test"))),
+                LoxString(Rc::new(String::from("Best String!"))),
             ],
         )
     }
