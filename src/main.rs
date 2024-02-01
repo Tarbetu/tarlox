@@ -10,6 +10,7 @@ use std::io;
 use std::io::Write;
 use std::process;
 use std::{env, fs};
+use syntax::Parser;
 
 fn main() {
     let mut args = env::args();
@@ -64,11 +65,9 @@ fn run_prompt() {
 
 fn run(code: &str) -> LoxResult<()> {
     let tokens = Scanner::new(code).scan_tokens()?;
+    let expr = Parser::new(&tokens).expression()?;
 
-    for token in tokens {
-        print!("{token}  ");
-    }
-    println!();
+    println!("{expr}");
 
     Ok(())
 }

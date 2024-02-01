@@ -5,7 +5,7 @@ use astro_float::BigFloat;
 
 use crate::{LoxError, Token, TokenType};
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub enum Expression {
     Binary(Box<Expression>, Operator, Box<Expression>),
     Unary(Operator, Box<Expression>),
@@ -34,7 +34,7 @@ impl Display for Expression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum LoxLiteral {
     Nil,
     Number(Rc<BigFloat>),
@@ -42,22 +42,22 @@ pub enum LoxLiteral {
     Bool(bool),
 }
 
-impl<'a> Display for LoxLiteral {
+impl Display for LoxLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use LoxLiteral::*;
 
         match self {
-            Nil => write!(f, "Nil"),
-            LoxString(s) => write!(f, "{s}"),
+            Nil => write!(f, "nil"),
+            LoxString(s) => write!(f, r#""{s}""#),
             Number(n) => write!(f, "{n}"),
             Bool(b) => write!(f, "{b}"),
         }
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Operator {
-    Equal,
+    Equality,
     NotEqual,
     Assignment,
     Minus,
@@ -77,7 +77,7 @@ impl TryInto<Operator> for &Token {
 
     fn try_into(self) -> Result<Operator, Self::Error> {
         match self.kind {
-            TokenType::Equal => Ok(Operator::Equal),
+            TokenType::EqualEqual => Ok(Operator::Equality),
             TokenType::BangEqual => Ok(Operator::NotEqual),
             TokenType::Minus => Ok(Operator::Minus),
             TokenType::Plus => Ok(Operator::Plus),
@@ -89,7 +89,7 @@ impl TryInto<Operator> for &Token {
             TokenType::GreaterEqual => Ok(Operator::GreaterOrEqual),
             TokenType::LessEqual => Ok(Operator::SmallerOrEqual),
             _ => Err(LoxError::InternalParsingError(
-                "Unmatched TokenType for operator",
+                "Unmatched TokenType for operator".into(),
             )),
         }
     }
@@ -103,7 +103,7 @@ impl Display for Operator {
             f,
             "{}",
             match *self {
-                Equal => "==",
+                Equality => "==",
                 NotEqual => "!=",
                 Assignment => "=",
                 Minus => "-",

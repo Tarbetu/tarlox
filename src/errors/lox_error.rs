@@ -1,27 +1,23 @@
 use core::fmt;
 use std::{
+    error::Error,
     fmt::Display,
     io::{self},
 };
 
-// We use static because this enum created while interpreter terminated
+/// This enum represents the state that we can't continue and
+/// nothing is recueable
+/// We should stop the program and deliver the error message to the user quickly
+/// after creating the LoxError object.
 #[derive(Debug, Clone)]
 pub enum LoxError {
     FileError,
-    UnexceptedCharacter {
-        line: usize,
-        character: char,
-    },
-    ParseError {
-        line: Option<usize>,
-        msg: &'static str,
-    },
-    RuntimeError {
-        line: Option<usize>,
-        msg: &'static str,
-    },
+    UnexceptedCharacter { line: usize, character: char },
+    ParseError { line: Option<usize>, msg: String },
+    RuntimeError { line: Option<usize>, msg: String },
     UnterminatedString,
-    InternalParsingError(&'static str),
+    InternalParsingError(String),
+    ExceptedExpression(usize),
     Other(String),
 }
 
@@ -36,17 +32,23 @@ impl Display for LoxError {
             }
             RuntimeError { line, msg } => {
                 if let Some(l) = line {
-                    write!(f, "[Runtime Error: Error at {}. {}]", l, msg)
+                    write!(f, "[Runtime Error: Error at {l}. {msg}]")
                 } else {
-                    write!(f, "[Runtime Error: Error at end. {}]", msg)
+                    write!(f, "[Runtime Error: Error at end. {msg}]")
                 }
             }
             ParseError { line, msg } => {
                 if let Some(l) = line {
-                    write!(f, "[Parse Error: Error at {}. {}]", l, msg)
+                    write!(f, "[Parse Error: Error at {l}. {msg}]")
                 } else {
-                    write!(f, "[Parse Error: Error at end. {}]", msg)
+                    write!(f, "[Parse Error: Error at end. {msg}]")
                 }
+            }
+            ExceptedExpression(line) => {
+                write!(
+                    f,
+                    "[Parse Error: Excepted Expression, found nothing ({line})]"
+                )
             }
             UnterminatedString => {
                 write!(f, "[Lox Error: Unterminated String]")
