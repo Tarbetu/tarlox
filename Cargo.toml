@@ -5,6 +5,9 @@ edition = "2021"
 
 [dependencies]
 astro-float = "0.9.2"
+async-recursion = "1.0.5"
+parking_lot = "0.12.1"
+tokio = { version = "1.36.0", features = ["full"] }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

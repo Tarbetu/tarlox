@@ -1,4 +1,5 @@
 mod errors;
+mod interpreter;
 mod scanner;
 mod syntax;
 
@@ -6,13 +7,15 @@ pub use crate::errors::LoxError;
 pub use crate::errors::LoxResult;
 pub use crate::scanner::{Token, TokenType};
 use scanner::Scanner;
+use std::env;
 use std::io;
 use std::io::Write;
 use std::process;
-use std::{env, fs};
 use syntax::Parser;
+use tokio::fs;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut args = env::args();
 
     use std::cmp::Ordering::*;
@@ -23,8 +26,8 @@ fn main() {
         }
         Equal => {
             let path = &args.next().unwrap();
-            if let Ok(source_code) = fs::read_to_string(path) {
-                if let Err(e) = run(&source_code) {
+            if let Ok(source_code) = fs::read_to_string(path).await {
+                if let Err(e) = run(&source_code).await {
                     println!("{e}");
                     process::exit(65)
                 }
@@ -35,11 +38,11 @@ fn main() {
 
             process::exit(0);
         }
-        Less => run_prompt(),
+        Less => run_prompt().await,
     }
 }
 
-fn run_prompt() {
+async fn run_prompt() {
     let mut input = String::new();
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -52,7 +55,7 @@ fn run_prompt() {
             break;
         };
 
-        if let Err(e) = run(&input) {
+        if let Err(e) = run(&input).await {
             println!("{e}\n");
         };
 
@@ -63,9 +66,9 @@ fn run_prompt() {
     }
 }
 
-fn run(code: &str) -> LoxResult<()> {
-    let tokens = Scanner::new(code).scan_tokens()?;
-    let expr = Parser::new(&tokens).expression()?;
+async fn run(code: &str) -> LoxResult<()> {
+    let tokens = Scanner::new(code).scan_tokens().await?;
+    let expr = Parser::new(&tokens).expression().await?;
 
     println!("{expr}");
 

@@ -30,9 +30,9 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_tokens(mut self) -> LoxResult<Vec<Token>> {
+    pub async fn scan_tokens(mut self) -> LoxResult<Vec<Token>> {
         while self.chars.peek().is_some() {
-            self.scan_token();
+            self.scan_token().await;
 
             if self.tokens.is_err() {
                 break;
@@ -49,81 +49,81 @@ impl<'a> Scanner<'a> {
         self.tokens
     }
 
-    fn scan_token(&mut self) {
+    async fn scan_token(&mut self) {
         use TokenType::*;
 
         if let Some(next_char) = self.chars.next() {
             match next_char {
                 '(' => {
-                    self.add_token(LeftParen);
+                    self.add_token(LeftParen).await;
                 }
                 ')' => {
-                    self.add_token(RightParen);
+                    self.add_token(RightParen).await;
                 }
                 '{' => {
-                    self.add_token(LeftBrace);
+                    self.add_token(LeftBrace).await;
                 }
                 '}' => {
-                    self.add_token(RightBrace);
+                    self.add_token(RightBrace).await;
                 }
                 ',' => {
-                    self.add_token(Comma);
+                    self.add_token(Comma).await;
                 }
                 '.' => {
-                    self.add_token(Dot);
+                    self.add_token(Dot).await;
                 }
                 '-' => {
-                    self.add_token(Minus);
+                    self.add_token(Minus).await;
                 }
                 '+' => {
-                    self.add_token(Plus);
+                    self.add_token(Plus).await;
                 }
                 ';' => {
-                    self.add_token(Semicolon);
+                    self.add_token(Semicolon).await;
                 }
                 '*' => {
-                    self.add_token(Star);
+                    self.add_token(Star).await;
                 }
                 '!' => {
                     if self.chars.next_if_eq(&'=').is_some() {
-                        self.add_token(BangEqual)
+                        self.add_token(BangEqual).await;
                     } else {
-                        self.add_token(Bang)
+                        self.add_token(Bang).await;
                     }
                 }
                 '=' => {
                     if self.chars.next_if_eq(&'=').is_some() {
-                        self.add_token(EqualEqual)
+                        self.add_token(EqualEqual).await;
                     } else {
-                        self.add_token(Equal)
+                        self.add_token(Equal).await;
                     }
                 }
                 '<' => {
                     if self.chars.next_if_eq(&'=').is_some() {
-                        self.add_token(LessEqual)
+                        self.add_token(LessEqual).await;
                     } else {
-                        self.add_token(Less)
+                        self.add_token(Less).await;
                     }
                 }
                 '>' => {
                     if self.chars.next_if_eq(&'=').is_some() {
-                        self.add_token(GreaterEqual)
+                        self.add_token(GreaterEqual).await;
                     } else {
-                        self.add_token(Greater)
+                        self.add_token(Greater).await;
                     }
                 }
                 '/' => {
                     if self.chars.next_if_eq(&'/').is_some() {
                         while !(self.chars.next() == Some('\n') || self.chars.peek().is_none()) {}
                     } else {
-                        self.add_token(Slash)
+                        self.add_token(Slash).await;
                     }
                 }
                 ' ' | '\r' | '\t' => (),
                 '\n' => self.line += 1,
-                '"' => self.string(),
-                num if num.is_ascii_digit() => self.number(num),
-                alpha if alpha.is_ascii_alphabetic() => self.identifier(alpha),
+                '"' => self.string().await,
+                num if num.is_ascii_digit() => self.number(num).await,
+                alpha if alpha.is_ascii_alphabetic() => self.identifier(alpha).await,
                 unexcepted_char => {
                     self.tokens = Err(LoxError::UnexceptedCharacter {
                         line: self.line,
@@ -134,7 +134,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn add_token(&mut self, kind: TokenType) {
+    async fn add_token(&mut self, kind: TokenType) {
         if let Ok(tokens) = &mut self.tokens {
             tokens.push(Token {
                 kind,
@@ -147,7 +147,7 @@ impl<'a> Scanner<'a> {
     // Also, we don't need any String allocation.
     // This is easy for now, but should be replaced with substrings.
 
-    fn string(&mut self) {
+    async fn string(&mut self) {
         let mut string = String::new();
 
         loop {
@@ -165,10 +165,10 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        self.add_token(TokenType::LoxString(Rc::new(string)))
+        self.add_token(TokenType::LoxString(Rc::new(string))).await
     }
 
-    fn number(&mut self, first_digit: char) {
+    async fn number(&mut self, first_digit: char) {
         let mut string = String::from(first_digit);
 
         loop {
@@ -180,7 +180,7 @@ impl<'a> Scanner<'a> {
                             string.push('.');
                             string.push(self.chars.next().unwrap())
                         } else {
-                            self.add_token(TokenType::Dot);
+                            self.add_token(TokenType::Dot).await;
                             break;
                         }
                     }
@@ -190,9 +190,10 @@ impl<'a> Scanner<'a> {
         }
 
         self.add_token(TokenType::Number(Rc::new(string.parse().unwrap())))
+            .await
     }
 
-    fn identifier(&mut self, first_digit: char) {
+    async fn identifier(&mut self, first_digit: char) {
         let mut string = String::from(first_digit);
 
         loop {
@@ -227,7 +228,7 @@ impl<'a> Scanner<'a> {
             }
         };
 
-        self.add_token(token_type)
+        self.add_token(token_type).await
     }
 }
 
@@ -238,7 +239,8 @@ mod tests {
     use TokenType::*;
 
     fn get_tokens(source: &'static str) -> LoxResult<Vec<Token>> {
-        Scanner::new(source).scan_tokens()
+        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async { Scanner::new(source).scan_tokens().await })
     }
 
     fn convert_tokens_into_token_types(tokens: Vec<Token>) -> Vec<TokenType> {
