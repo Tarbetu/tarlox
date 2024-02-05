@@ -1,11 +1,12 @@
 mod errors;
-mod interpreter;
+mod executor;
 mod scanner;
 mod syntax;
 
 pub use crate::errors::LoxError;
 pub use crate::errors::LoxResult;
 pub use crate::scanner::{Token, TokenType};
+use executor::Interpreter;
 use scanner::Scanner;
 use std::env;
 use std::io;
@@ -67,10 +68,12 @@ async fn run_prompt() {
 }
 
 async fn run(code: &str) -> LoxResult<()> {
-    let tokens = Scanner::new(code).scan_tokens().await?;
-    let expr = Parser::new(&tokens).expression().await?;
+    let expr = {
+        let tokens = Scanner::new(code).scan_tokens().await?;
+        Parser::new(&tokens).expression().await?
+    };
 
-    println!("{expr}");
+    Interpreter::interpret(expr).await;
 
     Ok(())
 }

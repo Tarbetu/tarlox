@@ -379,6 +379,22 @@ mod tests {
     }
 
     #[test]
+    fn test_bang() {
+        test_scanner(
+            "!bang",
+            vec![Bang, Identifier(Rc::new(String::from("bang")))],
+        )
+    }
+
+    #[test]
+    fn test_bang_bang() {
+        test_scanner(
+            "!!bang",
+            vec![Bang, Bang, Identifier(Rc::new(String::from("bang")))],
+        )
+    }
+
+    #[test]
     fn test_for_keyword() {
         test_scanner("for", vec![For])
     }

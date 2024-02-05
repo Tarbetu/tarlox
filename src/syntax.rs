@@ -87,12 +87,13 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
+    #[async_recursion(?Send)]
     async fn unary(&mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
         if self.is_match(&[Bang, Minus]) {
             let operator = self.previous().try_into()?;
-            let right = self.primary().await?;
+            let right = self.unary().await?;
 
             return Ok(Expression::Unary(operator, right.into()));
         }
@@ -225,7 +226,7 @@ mod tests {
 
     fn create_expression(source: &str) -> LoxResult<Expression> {
         use crate::Scanner;
-        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             Parser::new(&Scanner::new(source).scan_tokens().await.unwrap())
                 .expression()
@@ -244,6 +245,25 @@ mod tests {
         assert_eq!(
             create_expression("-4").unwrap(),
             Expression::Unary(Operator::Minus, create_number(4))
+        )
+    }
+
+    #[test]
+    fn test_bang_unary_expression() {
+        assert_eq!(
+            create_expression("!4").unwrap(),
+            Expression::Unary(Operator::Not, create_number(4))
+        )
+    }
+
+    #[test]
+    fn test_bang_bang_unary_expression() {
+        assert_eq!(
+            create_expression("!!4").unwrap(),
+            Expression::Unary(
+                Operator::Not,
+                Box::new(Expression::Unary(Operator::Not, create_number(4)))
+            )
         )
     }
 

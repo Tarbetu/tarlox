@@ -18,6 +18,7 @@ pub enum LoxError {
     UnterminatedString,
     InternalParsingError(String),
     ExceptedExpression(usize),
+    TypeError { excepted_type: String },
     Other(String),
 }
 
@@ -49,6 +50,9 @@ impl Display for LoxError {
                     f,
                     "[Parse Error: Excepted Expression, found nothing ({line})]"
                 )
+            }
+            TypeError { excepted_type } => {
+                write!(f, "[Type Error: Excepted {excepted_type}]")
             }
             UnterminatedString => {
                 write!(f, "[Lox Error: Unterminated String]")
