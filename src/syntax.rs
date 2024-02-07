@@ -6,11 +6,10 @@ use crate::LoxError;
 use crate::LoxResult;
 use crate::Token;
 use crate::TokenType;
-use async_recursion::async_recursion;
 pub use expression::Expression;
 use expression::LoxLiteral;
 use minor_parse_error::MinorParserError;
-use statement::Statement;
+pub use statement::Statement;
 
 use rug::Float;
 
@@ -20,100 +19,142 @@ pub struct Parser<'a> {
     current: usize,
 }
 
+macro_rules! return_if_cant_consume {
+    ($self:expr, $token_type:expr) => {
+        if let Err(err) = $self.consume($token_type) {
+            return Err(err.into_lox_error($self.previous().line, None, None));
+        }
+    };
+}
+
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a [Token]) -> Self {
         Self { tokens, current: 0 }
     }
 
-    pub async fn parse(&mut self) -> LoxResult<Vec<Statement>> {
+    pub fn parse(&mut self) -> LoxResult<Vec<Statement>> {
         let mut statements: Vec<Statement> = vec![];
 
-        while let Some(_) = self.peek() {
-            statements.push(self.statement().await?)
+        while self.peek().is_some() {
+            let program = self.declaration();
+            match program {
+                Ok(stmt) => statements.push(stmt),
+                Err(e) => {
+                    self.synchronize();
+                    return Err(e);
+                }
+            }
         }
 
         Ok(statements)
     }
 
-    async fn statement(&mut self) -> LoxResult<Statement> {
-        use TokenType::*;
+    fn declaration(&mut self) -> LoxResult<Statement> {
+        use TokenType::Var;
 
-        if self.is_match(&[Print]) {
-            self.print_statement().await
-        } else if self.is_match(&[Ready]) {
-            self.ready_statement().await
+        if self.is_match(&[Var]) {
+            return self.var_declaration();
+        }
+
+        self.statement()
+    }
+
+    fn var_declaration(&mut self) -> LoxResult<Statement> {
+        let name_result = self.consume(TokenType::Identifier(String::new()));
+
+        if let Ok(name) = name_result {
+            let mut initializer: Option<Expression> = None;
+
+            if self.is_match(&[TokenType::Equal]) {
+                initializer = Some(self.expression()?);
+            }
+
+            return_if_cant_consume!(self, TokenType::Semicolon);
+
+            Ok(Statement::Var(name.to_owned(), initializer))
         } else {
-            self.expression_statement().await
+            unimplemented!()
         }
     }
 
-    async fn print_statement(&mut self) -> LoxResult<Statement> {
-        let expr = self.expression().await?;
+    fn statement(&mut self) -> LoxResult<Statement> {
+        use TokenType::*;
 
-        self.consume(TokenType::Semicolon).await;
+        if self.is_match(&[Print]) {
+            self.print_statement()
+        } else if self.is_match(&[Ready]) {
+            self.ready_statement()
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    fn print_statement(&mut self) -> LoxResult<Statement> {
+        let expr = self.expression()?;
+
+        return_if_cant_consume!(self, TokenType::Semicolon);
 
         Ok(Statement::Print(expr))
     }
 
-    async fn expression_statement(&mut self) -> LoxResult<Statement> {
-        let expr = self.expression().await?;
+    fn expression_statement(&mut self) -> LoxResult<Statement> {
+        let expr = self.expression()?;
 
-        self.consume(TokenType::Semicolon).await;
+        return_if_cant_consume!(self, TokenType::Semicolon);
 
         Ok(Statement::StmtExpression(expr))
     }
 
-    async fn ready_statement(&mut self) -> LoxResult<Statement> {
-        let expr = self.expression().await?;
+    fn ready_statement(&mut self) -> LoxResult<Statement> {
+        let expr = self.expression()?;
 
-        self.consume(TokenType::Semicolon).await;
+        return_if_cant_consume!(self, TokenType::Semicolon);
 
         Ok(Statement::Ready(expr))
     }
 
-    #[async_recursion(?Send)]
-    async fn expression(&mut self) -> LoxResult<Expression> {
-        self.equality().await
+    fn expression(&mut self) -> LoxResult<Expression> {
+        self.equality()
     }
 
     // These methods can be handled via macros
 
-    async fn equality(&mut self) -> LoxResult<Expression> {
+    fn equality(&mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
-        let mut expr = self.comparison().await?;
+        let mut expr = self.comparison()?;
 
         while self.is_match(&[BangEqual, EqualEqual]) {
             let operator = self.previous().try_into()?;
-            let right = self.comparison().await?;
+            let right = self.comparison()?;
             expr = Expression::Binary(expr.into(), operator, right.into());
         }
 
         Ok(expr)
     }
 
-    async fn comparison(&mut self) -> LoxResult<Expression> {
+    fn comparison(&mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
-        let mut expr = self.term().await?;
+        let mut expr = self.term()?;
 
         while self.is_match(&[Greater, GreaterEqual, Less, LessEqual]) {
             let operator = self.previous().try_into()?;
-            let right = self.term().await?;
+            let right = self.term()?;
             expr = Expression::Binary(expr.into(), operator, right.into());
         }
 
         Ok(expr)
     }
 
-    async fn term(&mut self) -> LoxResult<Expression> {
+    fn term(&mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
-        let mut expr = self.factor().await?;
+        let mut expr = self.factor()?;
 
         while self.is_match(&[Minus, Plus]) {
             let operator = self.previous().try_into()?;
-            let right = self.factor().await?;
+            let right = self.factor()?;
 
             expr = Expression::Binary(expr.into(), operator, right.into());
         }
@@ -121,14 +162,14 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    async fn factor(&mut self) -> LoxResult<Expression> {
+    fn factor(&mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
-        let mut expr = self.unary().await?;
+        let mut expr = self.unary()?;
 
         while self.is_match(&[Slash, Star]) {
             let operator = self.previous().try_into()?;
-            let right = self.unary().await?;
+            let right = self.unary()?;
 
             expr = Expression::Binary(expr.into(), operator, right.into());
         }
@@ -136,21 +177,20 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    #[async_recursion(?Send)]
-    async fn unary(&mut self) -> LoxResult<Expression> {
+    fn unary(&mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
         if self.is_match(&[Bang, Minus]) {
             let operator = self.previous().try_into()?;
-            let right = self.unary().await?;
+            let right = self.unary()?;
 
             return Ok(Expression::Unary(operator, right.into()));
         }
 
-        self.primary().await
+        self.primary()
     }
 
-    async fn primary(&mut self) -> LoxResult<Expression> {
+    fn primary(&mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
         if self.is_match(&[False]) {
@@ -162,7 +202,7 @@ impl<'a> Parser<'a> {
         if self.is_match(&[Nil]) {
             return Ok(Expression::Literal(LoxLiteral::Nil));
         }
-        if self.is_match(&[Number(Float::new(2).into())]) {
+        if self.is_match(&[Number(Float::new(2))]) {
             let num = match self.previous().kind.clone() {
                 Number(x) => x,
                 _ => {
@@ -173,7 +213,7 @@ impl<'a> Parser<'a> {
             };
             return Ok(Expression::Literal(LoxLiteral::Number(num)));
         }
-        if self.is_match(&[LoxString(String::new().into())]) {
+        if self.is_match(&[LoxString(String::new())]) {
             let str = match self.previous().kind.clone() {
                 LoxString(s) => s,
                 _ => {
@@ -185,9 +225,9 @@ impl<'a> Parser<'a> {
             return Ok(Expression::Literal(LoxLiteral::LoxString(str)));
         }
         if self.is_match(&[LeftParen]) {
-            let expr = self.expression().await?;
+            let expr = self.expression()?;
 
-            if let Err(err) = self.consume(RightParen).await {
+            if let Err(err) = self.consume(RightParen) {
                 return Err(err.into_lox_error(self.previous().line, None, None));
             }
 
@@ -201,16 +241,16 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    async fn consume(&mut self, token_type: TokenType) -> Result<(), MinorParserError> {
+    fn consume(&mut self, token_type: TokenType) -> Result<&Token, MinorParserError> {
         if self.check(&token_type) {
             self.current += 1;
-            return Ok(());
+            return Ok(self.previous());
         };
 
         Err(MinorParserError::Unmatched(token_type))
     }
 
-    async fn synchronize(&mut self) {
+    fn synchronize(&mut self) {
         use TokenType::*;
 
         self.advance();
@@ -271,21 +311,16 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
     use crate::{syntax::expression::Operator, NUMBER_PREC};
-    use std::rc::Rc;
 
     fn create_expression(source: &str) -> LoxResult<Expression> {
         use crate::Scanner;
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            Parser::new(&Scanner::new(source).scan_tokens().await.unwrap())
-                .expression()
-                .await
-        })
+        Parser::new(&Scanner::new(source).scan_tokens().unwrap()).expression()
     }
 
     fn create_number(value: i32) -> Box<Expression> {
-        Box::new(Expression::Literal(LoxLiteral::Number(Rc::new(
-            Float::with_val(NUMBER_PREC, value),
+        Box::new(Expression::Literal(LoxLiteral::Number(Float::with_val(
+            NUMBER_PREC,
+            value,
         ))))
     }
 

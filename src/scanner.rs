@@ -5,7 +5,6 @@ pub use token::Token;
 pub use token_type::TokenType;
 
 use std::iter::Peekable;
-use std::rc::Rc;
 use std::str::Chars;
 
 use rug::Float;
@@ -32,9 +31,9 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub async fn scan_tokens(mut self) -> LoxResult<Vec<Token>> {
+    pub fn scan_tokens(mut self) -> LoxResult<Vec<Token>> {
         while self.chars.peek().is_some() {
-            self.scan_token().await;
+            self.scan_token();
 
             if self.tokens.is_err() {
                 break;
@@ -51,81 +50,81 @@ impl<'a> Scanner<'a> {
         self.tokens
     }
 
-    async fn scan_token(&mut self) {
+    fn scan_token(&mut self) {
         use TokenType::*;
 
         if let Some(next_char) = self.chars.next() {
             match next_char {
                 '(' => {
-                    self.add_token(LeftParen).await;
+                    self.add_token(LeftParen);
                 }
                 ')' => {
-                    self.add_token(RightParen).await;
+                    self.add_token(RightParen);
                 }
                 '{' => {
-                    self.add_token(LeftBrace).await;
+                    self.add_token(LeftBrace);
                 }
                 '}' => {
-                    self.add_token(RightBrace).await;
+                    self.add_token(RightBrace);
                 }
                 ',' => {
-                    self.add_token(Comma).await;
+                    self.add_token(Comma);
                 }
                 '.' => {
-                    self.add_token(Dot).await;
+                    self.add_token(Dot);
                 }
                 '-' => {
-                    self.add_token(Minus).await;
+                    self.add_token(Minus);
                 }
                 '+' => {
-                    self.add_token(Plus).await;
+                    self.add_token(Plus);
                 }
                 ';' => {
-                    self.add_token(Semicolon).await;
+                    self.add_token(Semicolon);
                 }
                 '*' => {
-                    self.add_token(Star).await;
+                    self.add_token(Star);
                 }
                 '!' => {
                     if self.chars.next_if_eq(&'=').is_some() {
-                        self.add_token(BangEqual).await;
+                        self.add_token(BangEqual);
                     } else {
-                        self.add_token(Bang).await;
+                        self.add_token(Bang);
                     }
                 }
                 '=' => {
                     if self.chars.next_if_eq(&'=').is_some() {
-                        self.add_token(EqualEqual).await;
+                        self.add_token(EqualEqual);
                     } else {
-                        self.add_token(Equal).await;
+                        self.add_token(Equal);
                     }
                 }
                 '<' => {
                     if self.chars.next_if_eq(&'=').is_some() {
-                        self.add_token(LessEqual).await;
+                        self.add_token(LessEqual);
                     } else {
-                        self.add_token(Less).await;
+                        self.add_token(Less);
                     }
                 }
                 '>' => {
                     if self.chars.next_if_eq(&'=').is_some() {
-                        self.add_token(GreaterEqual).await;
+                        self.add_token(GreaterEqual);
                     } else {
-                        self.add_token(Greater).await;
+                        self.add_token(Greater);
                     }
                 }
                 '/' => {
                     if self.chars.next_if_eq(&'/').is_some() {
                         while !(self.chars.next() == Some('\n') || self.chars.peek().is_none()) {}
                     } else {
-                        self.add_token(Slash).await;
+                        self.add_token(Slash);
                     }
                 }
                 ' ' | '\r' | '\t' => (),
                 '\n' => self.line += 1,
-                '"' => self.string().await,
-                num if num.is_ascii_digit() => self.number(num).await,
-                alpha if alpha.is_ascii_alphabetic() => self.identifier(alpha).await,
+                '"' => self.string(),
+                num if num.is_ascii_digit() => self.number(num),
+                alpha if alpha.is_ascii_alphabetic() => self.identifier(alpha),
                 unexcepted_char => {
                     self.tokens = Err(LoxError::UnexceptedCharacter {
                         line: self.line,
@@ -136,7 +135,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    async fn add_token(&mut self, kind: TokenType) {
+    fn add_token(&mut self, kind: TokenType) {
         if let Ok(tokens) = &mut self.tokens {
             tokens.push(Token {
                 kind,
@@ -149,7 +148,7 @@ impl<'a> Scanner<'a> {
     // Also, we don't need any String allocation.
     // This is easy for now, but should be replaced with substrings.
 
-    async fn string(&mut self) {
+    fn string(&mut self) {
         let mut string = String::new();
 
         loop {
@@ -167,10 +166,10 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        self.add_token(TokenType::LoxString(Rc::new(string))).await
+        self.add_token(TokenType::LoxString(string))
     }
 
-    async fn number(&mut self, first_digit: char) {
+    fn number(&mut self, first_digit: char) {
         let mut string = String::from(first_digit);
 
         loop {
@@ -182,7 +181,7 @@ impl<'a> Scanner<'a> {
                             string.push('.');
                             string.push(self.chars.next().unwrap())
                         } else {
-                            self.add_token(TokenType::Dot).await;
+                            self.add_token(TokenType::Dot);
                             break;
                         }
                     }
@@ -191,14 +190,13 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        self.add_token(TokenType::Number(Rc::new(Float::with_val(
+        self.add_token(TokenType::Number(Float::with_val(
             NUMBER_PREC,
             Float::parse(string).unwrap(),
-        ))))
-        .await
+        )))
     }
 
-    async fn identifier(&mut self, first_digit: char) {
+    fn identifier(&mut self, first_digit: char) {
         let mut string = String::from(first_digit);
 
         loop {
@@ -229,11 +227,11 @@ impl<'a> Scanner<'a> {
                 "true" => True,
                 "var" => Var,
                 "while" => While,
-                _ => Identifier(Rc::new(string)),
+                _ => Identifier(string),
             }
         };
 
-        self.add_token(token_type).await
+        self.add_token(token_type)
     }
 }
 
@@ -245,7 +243,7 @@ mod tests {
 
     fn get_tokens(source: &'static str) -> LoxResult<Vec<Token>> {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async { Scanner::new(source).scan_tokens().await })
+        rt.block_on(async { Scanner::new(source).scan_tokens() })
     }
 
     fn convert_tokens_into_token_types(tokens: Vec<Token>) -> Vec<TokenType> {
@@ -271,9 +269,9 @@ mod tests {
         test_scanner(
             "2 + 2",
             vec![
-                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.0))),
+                Number(Float::with_val(NUMBER_PREC, 2.0)),
                 Plus,
-                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.0))),
+                Number(Float::with_val(NUMBER_PREC, 2.0)),
             ],
         )
     }
@@ -283,9 +281,9 @@ mod tests {
         test_scanner(
             "2.5 + 2.5",
             vec![
-                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.5))),
+                Number(Float::with_val(NUMBER_PREC, 2.5)),
                 Plus,
-                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.5))),
+                Number(Float::with_val(NUMBER_PREC, 2.5)),
             ],
         )
     }
@@ -301,9 +299,9 @@ mod tests {
             "(2 + 2)",
             vec![
                 LeftParen,
-                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.0))),
+                Number(Float::with_val(NUMBER_PREC, 2.0)),
                 Plus,
-                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.0))),
+                Number(Float::with_val(NUMBER_PREC, 2.0)),
                 RightParen,
             ],
         )
@@ -315,9 +313,9 @@ mod tests {
             "(2.5 + 2.5)",
             vec![
                 LeftParen,
-                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.5))),
+                Number(Float::with_val(NUMBER_PREC, 2.5)),
                 Plus,
-                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.5))),
+                Number(Float::with_val(NUMBER_PREC, 2.5)),
                 RightParen,
             ],
         )
@@ -327,17 +325,14 @@ mod tests {
     fn test_identifier() {
         test_scanner(
             "tarbetu_is_best",
-            vec![Identifier(Rc::new(String::from("tarbetu_is_best")))],
+            vec![Identifier(String::from("tarbetu_is_best"))],
         )
     }
 
     #[should_panic]
     #[test]
     fn wrong_identifier_with_unicode() {
-        test_scanner(
-            "tarbetü",
-            vec![Identifier(Rc::new(String::from("tarbetü")))],
-        )
+        test_scanner("tarbetü", vec![Identifier(String::from("tarbetü"))])
     }
 
     #[test]
@@ -345,8 +340,8 @@ mod tests {
         test_scanner(
             "222a",
             vec![
-                Number(Rc::new(Float::with_val(NUMBER_PREC, 222.0))),
-                Identifier(Rc::new(String::from("a"))),
+                Number(Float::with_val(NUMBER_PREC, 222.0)),
+                Identifier(String::from("a")),
             ],
         )
     }
@@ -355,7 +350,7 @@ mod tests {
     fn test_string() {
         test_scanner(
             r#""This is a cool string""#,
-            vec![LoxString(Rc::new(String::from("This is a cool string")))],
+            vec![LoxString(String::from("This is a cool string"))],
         )
     }
 
@@ -365,8 +360,8 @@ mod tests {
             r#"("This is a cool string"s)"#,
             vec![
                 LeftParen,
-                LoxString(Rc::new(String::from("This is a cool string"))),
-                Identifier(Rc::new(String::from('s'))),
+                LoxString(String::from("This is a cool string")),
+                Identifier(String::from('s')),
                 RightParen,
             ],
         )
@@ -377,26 +372,20 @@ mod tests {
         test_scanner(
             r#"test"Best String!""#,
             vec![
-                Identifier(Rc::new(String::from("test"))),
-                LoxString(Rc::new(String::from("Best String!"))),
+                Identifier(String::from("test")),
+                LoxString(String::from("Best String!")),
             ],
         )
     }
 
     #[test]
     fn test_bang() {
-        test_scanner(
-            "!bang",
-            vec![Bang, Identifier(Rc::new(String::from("bang")))],
-        )
+        test_scanner("!bang", vec![Bang, Identifier(String::from("bang"))])
     }
 
     #[test]
     fn test_bang_bang() {
-        test_scanner(
-            "!!bang",
-            vec![Bang, Bang, Identifier(Rc::new(String::from("bang")))],
-        )
+        test_scanner("!!bang", vec![Bang, Bang, Identifier(String::from("bang"))])
     }
 
     #[test]

@@ -1,5 +1,4 @@
 use std::fmt::Display;
-use std::rc::Rc;
 
 use rug::Float;
 
@@ -37,8 +36,8 @@ impl Display for Expression {
 #[derive(Debug, PartialEq)]
 pub enum LoxLiteral {
     Nil,
-    Number(Rc<Float>),
-    LoxString(Rc<String>),
+    Number(Float),
+    LoxString(String),
     Bool(bool),
 }
 

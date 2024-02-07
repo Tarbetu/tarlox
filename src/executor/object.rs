@@ -64,7 +64,7 @@ impl LoxObject {
 
     pub async fn is_greater_equal(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
         Ok(LoxObject::from(
-            self.is_greater(rhs).await?.into() || self.is_equal(rhs).await.into(),
+            bool::from(&self.is_greater(rhs).await?) || bool::from(&self.is_equal(rhs).await),
         ))
     }
 
@@ -82,19 +82,19 @@ impl LoxObject {
 
     pub async fn is_less_equal(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
         Ok(Self::from(
-            self.is_less(rhs).await?.into() || self.is_equal(rhs).await.into(),
+            bool::from(&self.is_less(rhs).await?) || bool::from(&self.is_equal(rhs).await),
         ))
     }
 }
 
-impl ops::Mul<LoxObject> for LoxObject {
+impl ops::Mul<&LoxObject> for &LoxObject {
     type Output = LoxResult<LoxObject>;
 
-    fn mul(self, rhs: LoxObject) -> Self::Output {
+    fn mul(self, rhs: &LoxObject) -> Self::Output {
         use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
-            Ok(LoxObject::from(l * &r))
+            Ok(LoxObject::from(l.to_owned() * r))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -103,14 +103,14 @@ impl ops::Mul<LoxObject> for LoxObject {
     }
 }
 
-impl ops::Div<LoxObject> for LoxObject {
+impl ops::Div<&LoxObject> for &LoxObject {
     type Output = LoxResult<LoxObject>;
 
-    fn div(self, rhs: LoxObject) -> Self::Output {
+    fn div(self, rhs: &LoxObject) -> Self::Output {
         use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
-            Ok(LoxObject::from(l / &r))
+            Ok(LoxObject::from(l.to_owned() / r))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -119,14 +119,14 @@ impl ops::Div<LoxObject> for LoxObject {
     }
 }
 
-impl ops::Sub<LoxObject> for LoxObject {
+impl ops::Sub<&LoxObject> for &LoxObject {
     type Output = LoxResult<LoxObject>;
 
-    fn sub(self, rhs: LoxObject) -> Self::Output {
+    fn sub(self, rhs: &LoxObject) -> Self::Output {
         use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
-            Ok(LoxObject::from(l - &r))
+            Ok(LoxObject::from(l.to_owned() - r))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -135,16 +135,16 @@ impl ops::Sub<LoxObject> for LoxObject {
     }
 }
 
-impl ops::Add<LoxObject> for LoxObject {
+impl ops::Add<&LoxObject> for &LoxObject {
     type Output = LoxResult<LoxObject>;
 
-    fn add(self, rhs: LoxObject) -> Self::Output {
+    fn add(self, rhs: &LoxObject) -> Self::Output {
         use LoxObject::{LoxString, Number};
 
         if let (Number(l), Number(r)) = (&self, &rhs) {
-            Ok(LoxObject::from(l.clone() + r))
+            Ok(LoxObject::from(l.to_owned() + r))
         } else if let (LoxString(l), LoxString(r)) = (self, rhs) {
-            Ok(LoxObject::from(format!("{l}{r}")))
+            Ok(LoxObject::from(format!("{l}{r}").as_str()))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -153,8 +153,8 @@ impl ops::Add<LoxObject> for LoxObject {
     }
 }
 
-impl From<LoxObject> for bool {
-    fn from(obj: LoxObject) -> bool {
+impl From<&LoxObject> for bool {
+    fn from(obj: &LoxObject) -> bool {
         use LoxObject::*;
 
         !matches!(obj, Nil | Boolean(false))
@@ -167,15 +167,21 @@ impl From<bool> for LoxObject {
     }
 }
 
-impl From<String> for LoxObject {
-    fn from(s: String) -> LoxObject {
-        Self::LoxString(s)
+impl From<&str> for LoxObject {
+    fn from(s: &str) -> LoxObject {
+        Self::LoxString(s.into())
     }
 }
 
 impl From<Float> for LoxObject {
     fn from(n: Float) -> LoxObject {
         Self::Number(n)
+    }
+}
+
+impl From<&Float> for LoxObject {
+    fn from(n: &Float) -> LoxObject {
+        Self::Number(n.to_owned())
     }
 }
 

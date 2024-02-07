@@ -6,11 +6,8 @@ mod syntax;
 pub use crate::errors::LoxError;
 pub use crate::errors::LoxResult;
 pub use crate::scanner::{Token, TokenType};
-use executor::Interpreter;
 use scanner::Scanner;
 use std::env;
-use std::io;
-use std::io::Write;
 use std::process;
 use syntax::Parser;
 use tokio::fs;
@@ -47,36 +44,55 @@ async fn main() {
 }
 
 async fn run_prompt() {
-    let mut input = String::new();
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
+    // let mut input = String::new();
+    // let stdin = io::stdin();
+    // let mut stdout = io::stdout();
 
-    // This looks very clumsy. It's repeated inside the loop.
-    print!("Tarbetu's Lox>> ");
-    Write::flush(&mut stdout).expect("Can't flush stdout!");
-    while stdin.read_line(&mut input).is_ok() {
-        if input.is_empty() {
-            break;
-        };
+    // // This looks very clumsy. It's repeated inside the loop.
+    // print!("Tarbetu's Lox>> ");
+    // Write::flush(&mut stdout).expect("Can't flush stdout!");
+    // while stdin.read_line(&mut input).is_ok() {
+    //     if input.is_empty() {
+    //         break;
+    //     };
 
-        if let Err(e) = run(&input).await {
-            println!("{e}\n");
-        };
+    //     if let Err(e) = run(&input).await {
+    //         println!("{e}\n");
+    //     };
 
-        input.clear();
+    //     input.clear();
 
-        print!("Tarbetu's Lox>> ");
-        Write::flush(&mut stdout).expect("Can't flush stdout!");
+    //     print!("Tarbetu's Lox>> ");
+    //     Write::flush(&mut stdout).expect("Can't flush stdout!");
+    // }
+
+    let mut rl = rustyline::DefaultEditor::new().unwrap();
+
+    loop {
+        let readline = rl.readline("Tarbetu's Lox>> ");
+
+        match readline {
+            Ok(input) => {
+                if input.is_empty() {
+                    break;
+                };
+
+                if let Err(e) = run(&input).await {
+                    println!("{e}\n");
+                };
+            }
+            Err(_) => break,
+        }
     }
 }
 
 async fn run(code: &str) -> LoxResult<()> {
     let expr = {
-        let tokens = Scanner::new(code).scan_tokens().await?;
-        Parser::new(&tokens).parse().await?
+        let tokens = Scanner::new(code).scan_tokens()?;
+        Parser::new(&tokens).parse()?
     };
 
-    // Interpreter::interpret(expr).await;
+    executor::interpret(expr).await?;
 
     Ok(())
 }
