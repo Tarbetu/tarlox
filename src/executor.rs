@@ -2,7 +2,6 @@ mod object;
 
 use async_recursion::async_recursion;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use crate::syntax::expression::LoxLiteral;
 use crate::syntax::expression::Operator;
@@ -15,7 +14,10 @@ pub struct Interpreter;
 impl Interpreter {
     pub async fn interpret(expr: Expression) {
         let res = Self::eval(expr).await;
-        dbg!(res);
+
+        if let Ok(obj) = res {
+            println!("{}", obj.to_string());
+        }
     }
 
     #[async_recursion(?Send)]
@@ -25,22 +27,20 @@ impl Interpreter {
 
         match expr {
             Grouping(inner) => Self::eval(*inner).await,
-            Literal(Number(n)) => Ok(LoxObject::create_number(
+            Literal(Number(n)) => Ok(LoxObject::from(
                 Rc::try_unwrap(n).expect("Number is still used!"),
             )),
-            Literal(LoxString(s)) => Ok(LoxObject::create_string(
+            Literal(LoxString(s)) => Ok(LoxObject::from(
                 Rc::try_unwrap(s).expect("Number is still used!"),
             )),
-            Literal(Bool(b)) => Ok(LoxObject::Boolean(b)),
+            Literal(Bool(b)) => Ok(LoxObject::from(b)),
             Literal(Nil) => Ok(LoxObject::Nil),
             Unary(operator, right) => {
                 let right = Self::eval(*right).await?;
 
                 match operator {
-                    Operator::Minus => {
-                        Ok(LoxObject::Number(Arc::new(right.apply_negative().await?)))
-                    }
-                    Operator::Not => Ok(LoxObject::Boolean(!Into::<bool>::into(right))),
+                    Operator::Minus => Ok(LoxObject::from(right.apply_negative().await?)),
+                    Operator::Not => Ok(LoxObject::from(!bool::from(right))),
                     _ => unreachable!(),
                 }
             }

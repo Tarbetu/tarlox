@@ -1,34 +1,26 @@
 use crate::{LoxError, LoxResult};
-use astro_float::BigFloat;
-// use parking_lot::Mutex;
-use std::sync::Arc;
+
+use rug::Float;
+// use ahash::AHashMap;
+// use std::sync::Arc;
 
 // use std::any::Any;
 
 use std::ops;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum LoxObject {
     Nil,
-    // Remove Any
-    // UserDefined(Arc<Mutex<Box<Any + PartialEq + Eq>>>),
-    Number(Arc<BigFloat>),
-    LoxString(Arc<String>),
+    // UserDefined(AHashMap<String, LoxObject>),
+    Number(Float),
+    LoxString(String),
     Boolean(bool),
 }
 
 impl LoxObject {
-    pub fn create_number(num: BigFloat) -> Self {
-        Self::Number(Arc::new(num))
-    }
-
-    pub fn create_string(s: String) -> Self {
-        Self::LoxString(Arc::new(s))
-    }
-
-    pub async fn apply_negative(&self) -> LoxResult<BigFloat> {
+    pub async fn apply_negative(&self) -> LoxResult<Float> {
         if let Self::Number(n) = self {
-            Ok(n.neg())
+            Ok(-n.clone())
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -52,17 +44,17 @@ impl LoxObject {
         use LoxObject::Boolean;
 
         if let Boolean(b) = self.is_equal(rhs).await {
-            Boolean(!b)
+            Self::from(!b)
         } else {
             unreachable!()
         }
     }
 
     pub async fn is_greater(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
-        use LoxObject::{Boolean, Number};
+        use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
-            Ok(Boolean(l > r))
+            Ok(Self::from(l > r))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -71,16 +63,16 @@ impl LoxObject {
     }
 
     pub async fn is_greater_equal(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
-        Ok(LoxObject::Boolean(
+        Ok(LoxObject::from(
             self.is_greater(rhs).await?.into() || self.is_equal(rhs).await.into(),
         ))
     }
 
     pub async fn is_less(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
-        use LoxObject::{Boolean, Number};
+        use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
-            Ok(Boolean(l < r))
+            Ok(Self::from(l < r))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -89,8 +81,7 @@ impl LoxObject {
     }
 
     pub async fn is_less_equal(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
-        use LoxObject::Boolean;
-        Ok(Boolean(
+        Ok(Self::from(
             self.is_less(rhs).await?.into() || self.is_equal(rhs).await.into(),
         ))
     }
@@ -103,7 +94,7 @@ impl ops::Mul<LoxObject> for LoxObject {
         use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
-            Ok(LoxObject::Number(Arc::new(l.mul_full_prec(&r))))
+            Ok(LoxObject::from(l * &r))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -119,11 +110,7 @@ impl ops::Div<LoxObject> for LoxObject {
         use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
-            Ok(LoxObject::Number(Arc::new(l.div(
-                &r,
-                1024,
-                astro_float::RoundingMode::None,
-            ))))
+            Ok(LoxObject::from(l / &r))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -139,7 +126,7 @@ impl ops::Sub<LoxObject> for LoxObject {
         use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
-            Ok(LoxObject::Number(Arc::new(l.sub_full_prec(&r))))
+            Ok(LoxObject::from(l - &r))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -155,9 +142,9 @@ impl ops::Add<LoxObject> for LoxObject {
         use LoxObject::{LoxString, Number};
 
         if let (Number(l), Number(r)) = (&self, &rhs) {
-            Ok(LoxObject::Number(Arc::new(l.add_full_prec(r))))
+            Ok(LoxObject::from(l.clone() + r))
         } else if let (LoxString(l), LoxString(r)) = (self, rhs) {
-            Ok(LoxObject::LoxString(Arc::new(format!("{l}{r}"))))
+            Ok(LoxObject::from(format!("{l}{r}")))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -166,10 +153,41 @@ impl ops::Add<LoxObject> for LoxObject {
     }
 }
 
-impl Into<bool> for LoxObject {
-    fn into(self) -> bool {
+impl From<LoxObject> for bool {
+    fn from(obj: LoxObject) -> bool {
         use LoxObject::*;
 
-        !matches!(self, Nil | Boolean(false))
+        !matches!(obj, Nil | Boolean(false))
+    }
+}
+
+impl From<bool> for LoxObject {
+    fn from(b: bool) -> LoxObject {
+        Self::Boolean(b)
+    }
+}
+
+impl From<String> for LoxObject {
+    fn from(s: String) -> LoxObject {
+        Self::LoxString(s)
+    }
+}
+
+impl From<Float> for LoxObject {
+    fn from(n: Float) -> LoxObject {
+        Self::Number(n)
+    }
+}
+
+impl ToString for LoxObject {
+    fn to_string(&self) -> String {
+        use LoxObject::*;
+
+        match self {
+            Nil => String::from("nil"),
+            LoxString(s) => s.to_owned(),
+            Number(n) => n.to_string(),
+            Boolean(b) => b.to_string(),
+        }
     }
 }

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::rc::Rc;
 
-use astro_float::BigFloat;
+use rug::Float;
 
 use crate::{LoxError, Token, TokenType};
 
@@ -37,7 +37,7 @@ impl Display for Expression {
 #[derive(Debug, PartialEq)]
 pub enum LoxLiteral {
     Nil,
-    Number(Rc<BigFloat>),
+    Number(Rc<Float>),
     LoxString(Rc<String>),
     Bool(bool),
 }

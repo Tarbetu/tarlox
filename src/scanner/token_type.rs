@@ -1,4 +1,4 @@
-use astro_float::BigFloat;
+use rug::Float;
 use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -26,7 +26,7 @@ pub enum TokenType {
     // literals,
     Identifier(Rc<String>),
     LoxString(Rc<String>),
-    Number(Rc<BigFloat>),
+    Number(Rc<Float>),
     // keywords,
     And,
     Class,
@@ -38,6 +38,7 @@ pub enum TokenType {
     Nil,
     Or,
     Print,
+    Ready,
     Return,
     Super,
     This,

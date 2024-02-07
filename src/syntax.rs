@@ -1,15 +1,18 @@
 pub mod expression;
 pub mod minor_parse_error;
+pub mod statement;
 
 use crate::LoxError;
 use crate::LoxResult;
 use crate::Token;
 use crate::TokenType;
-use astro_float::BigFloat;
 use async_recursion::async_recursion;
 pub use expression::Expression;
 use expression::LoxLiteral;
 use minor_parse_error::MinorParserError;
+use statement::Statement;
+
+use rug::Float;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Parser<'a> {
@@ -22,8 +25,54 @@ impl<'a> Parser<'a> {
         Self { tokens, current: 0 }
     }
 
+    pub async fn parse(&mut self) -> LoxResult<Vec<Statement>> {
+        let mut statements: Vec<Statement> = vec![];
+
+        while let Some(_) = self.peek() {
+            statements.push(self.statement().await?)
+        }
+
+        Ok(statements)
+    }
+
+    async fn statement(&mut self) -> LoxResult<Statement> {
+        use TokenType::*;
+
+        if self.is_match(&[Print]) {
+            self.print_statement().await
+        } else if self.is_match(&[Ready]) {
+            self.ready_statement().await
+        } else {
+            self.expression_statement().await
+        }
+    }
+
+    async fn print_statement(&mut self) -> LoxResult<Statement> {
+        let expr = self.expression().await?;
+
+        self.consume(TokenType::Semicolon).await;
+
+        Ok(Statement::Print(expr))
+    }
+
+    async fn expression_statement(&mut self) -> LoxResult<Statement> {
+        let expr = self.expression().await?;
+
+        self.consume(TokenType::Semicolon).await;
+
+        Ok(Statement::StmtExpression(expr))
+    }
+
+    async fn ready_statement(&mut self) -> LoxResult<Statement> {
+        let expr = self.expression().await?;
+
+        self.consume(TokenType::Semicolon).await;
+
+        Ok(Statement::Ready(expr))
+    }
+
     #[async_recursion(?Send)]
-    pub async fn expression(&mut self) -> LoxResult<Expression> {
+    async fn expression(&mut self) -> LoxResult<Expression> {
         self.equality().await
     }
 
@@ -113,7 +162,7 @@ impl<'a> Parser<'a> {
         if self.is_match(&[Nil]) {
             return Ok(Expression::Literal(LoxLiteral::Nil));
         }
-        if self.is_match(&[Number(BigFloat::new(0).into())]) {
+        if self.is_match(&[Number(Float::new(2).into())]) {
             let num = match self.previous().kind.clone() {
                 Number(x) => x,
                 _ => {
@@ -221,7 +270,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::syntax::expression::Operator;
+    use crate::{syntax::expression::Operator, NUMBER_PREC};
     use std::rc::Rc;
 
     fn create_expression(source: &str) -> LoxResult<Expression> {
@@ -236,7 +285,7 @@ mod tests {
 
     fn create_number(value: i32) -> Box<Expression> {
         Box::new(Expression::Literal(LoxLiteral::Number(Rc::new(
-            value.into(),
+            Float::with_val(NUMBER_PREC, value),
         ))))
     }
 

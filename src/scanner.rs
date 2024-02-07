@@ -8,7 +8,9 @@ use std::iter::Peekable;
 use std::rc::Rc;
 use std::str::Chars;
 
-use crate::{LoxError, LoxResult};
+use rug::Float;
+
+use crate::{LoxError, LoxResult, NUMBER_PREC};
 
 // Our scanner is cool, but it can be improved
 // For example, we don't need any string allocations
@@ -189,8 +191,11 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        self.add_token(TokenType::Number(Rc::new(string.parse().unwrap())))
-            .await
+        self.add_token(TokenType::Number(Rc::new(Float::with_val(
+            NUMBER_PREC,
+            Float::parse(string).unwrap(),
+        ))))
+        .await
     }
 
     async fn identifier(&mut self, first_digit: char) {
@@ -235,11 +240,11 @@ impl<'a> Scanner<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use astro_float::BigFloat;
+    use rug::Float;
     use TokenType::*;
 
     fn get_tokens(source: &'static str) -> LoxResult<Vec<Token>> {
-        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async { Scanner::new(source).scan_tokens().await })
     }
 
@@ -266,9 +271,9 @@ mod tests {
         test_scanner(
             "2 + 2",
             vec![
-                Number(Rc::new(BigFloat::from(2.0))),
+                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.0))),
                 Plus,
-                Number(Rc::new(BigFloat::from(2.0))),
+                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.0))),
             ],
         )
     }
@@ -278,9 +283,9 @@ mod tests {
         test_scanner(
             "2.5 + 2.5",
             vec![
-                Number(Rc::new(BigFloat::from(2.5))),
+                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.5))),
                 Plus,
-                Number(Rc::new(BigFloat::from(2.5))),
+                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.5))),
             ],
         )
     }
@@ -296,9 +301,9 @@ mod tests {
             "(2 + 2)",
             vec![
                 LeftParen,
-                Number(Rc::new(BigFloat::from(2.0))),
+                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.0))),
                 Plus,
-                Number(Rc::new(BigFloat::from(2.0))),
+                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.0))),
                 RightParen,
             ],
         )
@@ -310,9 +315,9 @@ mod tests {
             "(2.5 + 2.5)",
             vec![
                 LeftParen,
-                Number(Rc::new(BigFloat::from(2.5))),
+                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.5))),
                 Plus,
-                Number(Rc::new(BigFloat::from(2.5))),
+                Number(Rc::new(Float::with_val(NUMBER_PREC, 2.5))),
                 RightParen,
             ],
         )
@@ -340,7 +345,7 @@ mod tests {
         test_scanner(
             "222a",
             vec![
-                Number(Rc::new(BigFloat::from(222.0))),
+                Number(Rc::new(Float::with_val(NUMBER_PREC, 222.0))),
                 Identifier(Rc::new(String::from("a"))),
             ],
         )

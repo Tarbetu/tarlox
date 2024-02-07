@@ -15,6 +15,9 @@ use std::process;
 use syntax::Parser;
 use tokio::fs;
 
+// pub const NUMBER_PREC: u32 = rug::float::prec_max();
+pub const NUMBER_PREC: u32 = 2046;
+
 #[tokio::main]
 async fn main() {
     let mut args = env::args();
@@ -70,10 +73,10 @@ async fn run_prompt() {
 async fn run(code: &str) -> LoxResult<()> {
     let expr = {
         let tokens = Scanner::new(code).scan_tokens().await?;
-        Parser::new(&tokens).expression().await?
+        Parser::new(&tokens).parse().await?
     };
 
-    Interpreter::interpret(expr).await;
+    // Interpreter::interpret(expr).await;
 
     Ok(())
 }
