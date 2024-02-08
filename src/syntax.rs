@@ -60,7 +60,9 @@ impl<'a> Parser<'a> {
     }
 
     fn var_declaration(&mut self) -> LoxResult<Statement> {
-        let name_result = self.consume(TokenType::Identifier(String::new()));
+        let name_result = self
+            .consume(TokenType::Identifier(String::new()))
+            .map(|token| token.to_owned());
 
         if let Ok(name) = name_result {
             let mut initializer: Option<Expression> = None;
@@ -71,9 +73,9 @@ impl<'a> Parser<'a> {
 
             return_if_cant_consume!(self, TokenType::Semicolon);
 
-            Ok(Statement::Var(name.to_owned(), initializer))
+            Ok(Statement::Var(name, initializer))
         } else {
-            unimplemented!()
+            Err(name_result.unwrap_err().into_lox_error(0, None, None))
         }
     }
 
@@ -223,6 +225,9 @@ impl<'a> Parser<'a> {
                 }
             };
             return Ok(Expression::Literal(LoxLiteral::LoxString(str)));
+        }
+        if self.is_match(&[Identifier(String::new())]) {
+            return Ok(Expression::Variable(self.previous().to_owned()));
         }
         if self.is_match(&[LeftParen]) {
             let expr = self.expression()?;

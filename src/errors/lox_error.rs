@@ -1,6 +1,5 @@
 use core::fmt;
 use std::{
-    error::Error,
     fmt::Display,
     io::{self},
 };

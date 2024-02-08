@@ -1,5 +1,4 @@
 use rug::Float;
-use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {

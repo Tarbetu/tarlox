@@ -6,7 +6,7 @@ use rug::Float;
 
 // use std::any::Any;
 
-use std::ops;
+use std::{future::Future, ops};
 
 #[derive(Debug, PartialEq)]
 pub enum LoxObject {
@@ -18,7 +18,7 @@ pub enum LoxObject {
 }
 
 impl LoxObject {
-    pub async fn apply_negative(&self) -> LoxResult<Float> {
+    pub fn apply_negative(&self) -> LoxResult<Float> {
         if let Self::Number(n) = self {
             Ok(-n.clone())
         } else {
@@ -28,7 +28,7 @@ impl LoxObject {
         }
     }
 
-    pub async fn is_equal(&self, rhs: &LoxObject) -> LoxObject {
+    pub fn is_equal(&self, rhs: &LoxObject) -> LoxObject {
         use LoxObject::{Boolean, Nil};
 
         if let (Nil, Nil) = (self, rhs) {
@@ -40,17 +40,17 @@ impl LoxObject {
         }
     }
 
-    pub async fn is_not_equal(&self, rhs: &LoxObject) -> LoxObject {
+    pub fn is_not_equal(&self, rhs: &LoxObject) -> LoxObject {
         use LoxObject::Boolean;
 
-        if let Boolean(b) = self.is_equal(rhs).await {
+        if let Boolean(b) = self.is_equal(rhs) {
             Self::from(!b)
         } else {
             unreachable!()
         }
     }
 
-    pub async fn is_greater(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
+    pub fn is_greater(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
         use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
@@ -62,13 +62,13 @@ impl LoxObject {
         }
     }
 
-    pub async fn is_greater_equal(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
+    pub fn is_greater_equal(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
         Ok(LoxObject::from(
-            bool::from(&self.is_greater(rhs).await?) || bool::from(&self.is_equal(rhs).await),
+            bool::from(&self.is_greater(rhs)?) || bool::from(&self.is_equal(rhs)),
         ))
     }
 
-    pub async fn is_less(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
+    pub fn is_less(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
         use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
@@ -80,9 +80,9 @@ impl LoxObject {
         }
     }
 
-    pub async fn is_less_equal(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
+    pub fn is_less_equal(&self, rhs: &LoxObject) -> LoxResult<LoxObject> {
         Ok(Self::from(
-            bool::from(&self.is_less(rhs).await?) || bool::from(&self.is_equal(rhs).await),
+            bool::from(&self.is_less(rhs)?) || bool::from(&self.is_equal(rhs)),
         ))
     }
 }

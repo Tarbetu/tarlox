@@ -44,28 +44,6 @@ async fn main() {
 }
 
 async fn run_prompt() {
-    // let mut input = String::new();
-    // let stdin = io::stdin();
-    // let mut stdout = io::stdout();
-
-    // // This looks very clumsy. It's repeated inside the loop.
-    // print!("Tarbetu's Lox>> ");
-    // Write::flush(&mut stdout).expect("Can't flush stdout!");
-    // while stdin.read_line(&mut input).is_ok() {
-    //     if input.is_empty() {
-    //         break;
-    //     };
-
-    //     if let Err(e) = run(&input).await {
-    //         println!("{e}\n");
-    //     };
-
-    //     input.clear();
-
-    //     print!("Tarbetu's Lox>> ");
-    //     Write::flush(&mut stdout).expect("Can't flush stdout!");
-    // }
-
     let mut rl = rustyline::DefaultEditor::new().unwrap();
 
     loop {

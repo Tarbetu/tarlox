@@ -10,6 +10,7 @@ pub enum Expression {
     Unary(Operator, Box<Expression>),
     Grouping(Box<Expression>),
     Literal(LoxLiteral),
+    Variable(Token),
 }
 
 impl Display for Expression {
@@ -28,6 +29,9 @@ impl Display for Expression {
             }
             Literal(literal) => {
                 write!(f, "{literal}")
+            }
+            Variable(token) => {
+                write!(f, "{token}")
             }
         }
     }
