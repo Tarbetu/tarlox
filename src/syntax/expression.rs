@@ -91,7 +91,7 @@ impl TryInto<Operator> for &Token {
             TokenType::Less => Ok(Operator::Smaller),
             TokenType::GreaterEqual => Ok(Operator::GreaterOrEqual),
             TokenType::LessEqual => Ok(Operator::SmallerOrEqual),
-            _ => Err(LoxError::InternalParsingError(
+            _ => Err(LoxError::InternalError(
                 "Unmatched TokenType for operator".into(),
             )),
         }

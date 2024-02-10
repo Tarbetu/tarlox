@@ -207,22 +207,14 @@ impl<'a> Parser<'a> {
         if self.is_match(&[Number(Float::new(2))]) {
             let num = match self.previous().kind.clone() {
                 Number(x) => x,
-                _ => {
-                    return Err(LoxError::InternalParsingError(
-                        "Error while parsing Number".into(),
-                    ))
-                }
+                _ => return Err(LoxError::InternalError("Error while parsing Number".into())),
             };
             return Ok(Expression::Literal(LoxLiteral::Number(num)));
         }
         if self.is_match(&[LoxString(String::new())]) {
             let str = match self.previous().kind.clone() {
                 LoxString(s) => s,
-                _ => {
-                    return Err(LoxError::InternalParsingError(
-                        "Error while parsing String".into(),
-                    ))
-                }
+                _ => return Err(LoxError::InternalError("Error while parsing String".into())),
             };
             return Ok(Expression::Literal(LoxLiteral::LoxString(str)));
         }

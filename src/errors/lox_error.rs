@@ -1,4 +1,5 @@
 use core::fmt;
+use std::sync::mpsc::RecvError;
 use std::{
     fmt::Display,
     io::{self},
@@ -15,7 +16,7 @@ pub enum LoxError {
     ParseError { line: Option<usize>, msg: String },
     RuntimeError { line: Option<usize>, msg: String },
     UnterminatedString,
-    InternalParsingError(String),
+    InternalError(String),
     ExceptedExpression(usize),
     TypeError { excepted_type: String },
     Other(String),
@@ -56,7 +57,7 @@ impl Display for LoxError {
             UnterminatedString => {
                 write!(f, "[Lox Error: Unterminated String]")
             }
-            InternalParsingError(msg) => write!(f, "[Internal Error: Can't parsed! {msg}]"),
+            InternalError(msg) => write!(f, "[Internal Error: {msg}]"),
             Other(txt) => write!(f, "[Unexcepted Error from io::Error - {txt}]"),
         }
     }
@@ -70,5 +71,11 @@ impl From<io::Error> for LoxError {
             NotFound | PermissionDenied => Self::FileError,
             other => Self::Other(other.to_string()),
         }
+    }
+}
+
+impl From<RecvError> for LoxError {
+    fn from(_: RecvError) -> Self {
+        Self::InternalError("Error while connecting channel!".into())
     }
 }

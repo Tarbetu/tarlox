@@ -1,9 +1,13 @@
 use ahash::AHashMap;
+use either::Either::{self, Left, Right};
+use parking_lot::Mutex;
 use rayon::{ThreadPool, ThreadPoolBuilder};
+use std::sync::Arc;
 
 use crate::{syntax::Expression, LoxResult};
 
-use super::{eval_expression, object::LoxObject};
+use super::eval_expression;
+use super::object::LoxObject;
 
 use std::{
     num::NonZeroUsize,
@@ -11,18 +15,20 @@ use std::{
     thread::available_parallelism,
 };
 
-enum PackagedObject {
+#[derive(Debug)]
+pub enum PackagedObject {
     Pending(Receiver<LoxResult<LoxObject>>),
     Ready(LoxResult<LoxObject>),
 }
 
+#[derive(Debug)]
 pub struct Environment {
-    values: AHashMap<String, PackagedObject>,
-    pool: ThreadPool,
+    pub values: AHashMap<String, PackagedObject>,
+    pub pool: ThreadPool,
 }
 
 impl Environment {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             values: AHashMap::new(),
             pool: ThreadPoolBuilder::new()
@@ -35,31 +41,32 @@ impl Environment {
                 .unwrap(),
         }
     }
+}
 
-    fn put(&mut self, name: String, expr: Expression) {
-        let (sender, receiver) = channel();
-        self.values.insert(name, PackagedObject::Pending(receiver));
+pub fn put(environment: Arc<Mutex<Environment>>, name: String, expr: &Expression) {
+    let (sender, receiver) = channel();
 
-        self.pool.install(move || {
-            sender.send(eval_expression(&expr)).unwrap();
-        });
-    }
+    let environment_inner = environment.clone();
+    let mut env = environment.lock();
+    env.values.insert(name, PackagedObject::Pending(receiver));
 
-    fn get(&mut self, name: String) -> Option<&PackagedObject> {
-        use PackagedObject::*;
+    env.pool.install(move || {
+        sender
+            .send(eval_expression(environment_inner, expr))
+            .unwrap();
+    });
+}
 
-        let status = self.values.get_mut(&name)?;
-
-        match status {
-            Pending(recv) => match recv.try_recv() {
-                Ok(obj) => {
-                    *status = PackagedObject::Ready(obj);
-                    Some(status)
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => Some(status),
-                Err(_) => panic!("Receiver is disconnected!"),
-            },
-            Ready(_) => Some(status),
-        }
-    }
+pub fn put_immediately(
+    environment: Arc<Mutex<Environment>>,
+    name: String,
+    expr_or_obj: Either<&Expression, LoxObject>,
+) {
+    environment.clone().lock().values.insert(
+        name,
+        PackagedObject::Ready(match expr_or_obj {
+            Left(expr) => eval_expression(environment, expr),
+            Right(obj) => Ok(obj),
+        }),
+    );
 }

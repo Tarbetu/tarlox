@@ -1,26 +1,25 @@
-use crate::{LoxError, LoxResult};
+use crate::{LoxError, LoxResult, NUMBER_PREC};
 
 use rug::Float;
-// use ahash::AHashMap;
-// use std::sync::Arc;
+use std::sync::Arc;
 
 // use std::any::Any;
 
-use std::{future::Future, ops};
+use std::ops;
 
 #[derive(Debug, PartialEq)]
 pub enum LoxObject {
     Nil,
     // UserDefined(AHashMap<String, LoxObject>),
-    Number(Float),
-    LoxString(String),
+    Number(Arc<Float>),
+    LoxString(Arc<String>),
     Boolean(bool),
 }
 
 impl LoxObject {
-    pub fn apply_negative(&self) -> LoxResult<Float> {
+    pub fn apply_negative(self) -> LoxResult<Float> {
         if let Self::Number(n) = self {
-            Ok(-n.clone())
+            Ok((*n.as_neg()).to_owned())
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -36,7 +35,7 @@ impl LoxObject {
         } else if let Nil = self {
             Boolean(false)
         } else {
-            Boolean(self == rhs)
+            Boolean(*self == *rhs)
         }
     }
 
@@ -87,14 +86,14 @@ impl LoxObject {
     }
 }
 
-impl ops::Mul<&LoxObject> for &LoxObject {
+impl ops::Mul<LoxObject> for LoxObject {
     type Output = LoxResult<LoxObject>;
 
-    fn mul(self, rhs: &LoxObject) -> Self::Output {
+    fn mul(self, rhs: LoxObject) -> Self::Output {
         use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
-            Ok(LoxObject::from(l.to_owned() * r))
+            Ok(LoxObject::from(Float::with_val(NUMBER_PREC, &*l * &*r)))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -103,14 +102,14 @@ impl ops::Mul<&LoxObject> for &LoxObject {
     }
 }
 
-impl ops::Div<&LoxObject> for &LoxObject {
+impl ops::Div<LoxObject> for LoxObject {
     type Output = LoxResult<LoxObject>;
 
-    fn div(self, rhs: &LoxObject) -> Self::Output {
+    fn div(self, rhs: LoxObject) -> Self::Output {
         use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
-            Ok(LoxObject::from(l.to_owned() / r))
+            Ok(LoxObject::from(Float::with_val(NUMBER_PREC, &*l / &*r)))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -119,14 +118,14 @@ impl ops::Div<&LoxObject> for &LoxObject {
     }
 }
 
-impl ops::Sub<&LoxObject> for &LoxObject {
+impl ops::Sub<LoxObject> for LoxObject {
     type Output = LoxResult<LoxObject>;
 
-    fn sub(self, rhs: &LoxObject) -> Self::Output {
+    fn sub(self, rhs: LoxObject) -> Self::Output {
         use LoxObject::Number;
 
         if let (Number(l), Number(r)) = (self, rhs) {
-            Ok(LoxObject::from(l.to_owned() - r))
+            Ok(LoxObject::from(Float::with_val(NUMBER_PREC, &*l - &*r)))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -135,16 +134,16 @@ impl ops::Sub<&LoxObject> for &LoxObject {
     }
 }
 
-impl ops::Add<&LoxObject> for &LoxObject {
+impl ops::Add<LoxObject> for LoxObject {
     type Output = LoxResult<LoxObject>;
 
-    fn add(self, rhs: &LoxObject) -> Self::Output {
+    fn add(self, rhs: LoxObject) -> Self::Output {
         use LoxObject::{LoxString, Number};
 
-        if let (Number(l), Number(r)) = (&self, &rhs) {
-            Ok(LoxObject::from(l.to_owned() + r))
-        } else if let (LoxString(l), LoxString(r)) = (self, rhs) {
+        if let (LoxString(l), LoxString(r)) = (&self, &rhs) {
             Ok(LoxObject::from(format!("{l}{r}").as_str()))
+        } else if let (Number(l), Number(r)) = (self, rhs) {
+            Ok(LoxObject::from(Float::with_val(NUMBER_PREC, &*l + &*r)))
         } else {
             Err(LoxError::TypeError {
                 excepted_type: "Number".into(),
@@ -169,19 +168,19 @@ impl From<bool> for LoxObject {
 
 impl From<&str> for LoxObject {
     fn from(s: &str) -> LoxObject {
-        Self::LoxString(s.into())
+        Self::LoxString(Arc::new(s.into()))
     }
 }
 
 impl From<Float> for LoxObject {
     fn from(n: Float) -> LoxObject {
-        Self::Number(n)
+        Self::Number(n.into())
     }
 }
 
 impl From<&Float> for LoxObject {
     fn from(n: &Float) -> LoxObject {
-        Self::Number(n.to_owned())
+        Self::Number(n.to_owned().into())
     }
 }
 
@@ -191,9 +190,22 @@ impl ToString for LoxObject {
 
         match self {
             Nil => String::from("nil"),
-            LoxString(s) => s.to_owned(),
+            LoxString(s) => String::clone(s),
             Number(n) => n.to_string(),
             Boolean(b) => b.to_string(),
+        }
+    }
+}
+
+impl From<&LoxObject> for LoxObject {
+    fn from(value: &LoxObject) -> Self {
+        use LoxObject::*;
+
+        match value {
+            LoxString(str) => LoxString(str.clone()),
+            Number(num) => Number(num.clone()),
+            Boolean(bool) => Boolean(*bool),
+            Nil => Nil,
         }
     }
 }

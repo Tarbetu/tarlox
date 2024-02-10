@@ -6,6 +6,7 @@ mod syntax;
 pub use crate::errors::LoxError;
 pub use crate::errors::LoxResult;
 pub use crate::scanner::{Token, TokenType};
+use executor::Environment;
 use scanner::Scanner;
 use std::env;
 use std::process;
@@ -70,7 +71,7 @@ async fn run(code: &str) -> LoxResult<()> {
         Parser::new(&tokens).parse()?
     };
 
-    executor::interpret(expr).await?;
+    executor::Executor::new().execute(expr).await?;
 
     Ok(())
 }
