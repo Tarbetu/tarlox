@@ -1,72 +1,69 @@
-use ahash::AHashMap;
+use dashmap::DashMap;
 use either::Either::{self, Left, Right};
-use parking_lot::Mutex;
-use rayon::{ThreadPool, ThreadPoolBuilder};
-use std::sync::Arc;
+use rayon::ThreadPool;
+use std::hash::Hasher;
+use std::sync::Mutex;
+use std::sync::{Arc, Condvar};
 
 use crate::{syntax::Expression, LoxResult};
 
 use super::eval_expression;
 use super::object::LoxObject;
 
-use std::{
-    num::NonZeroUsize,
-    sync::mpsc::{channel, Receiver},
-    thread::available_parallelism,
-};
-
 #[derive(Debug)]
 pub enum PackagedObject {
-    Pending(Receiver<LoxResult<LoxObject>>),
+    Pending(Mutex<bool>, Condvar),
     Ready(LoxResult<LoxObject>),
 }
 
 #[derive(Debug)]
 pub struct Environment {
-    pub values: AHashMap<String, PackagedObject>,
-    pub pool: ThreadPool,
+    pub values: DashMap<u64, PackagedObject, ahash::RandomState>,
 }
 
 impl Environment {
     pub fn new() -> Self {
         Self {
-            values: AHashMap::new(),
-            pool: ThreadPoolBuilder::new()
-                .num_threads(
-                    available_parallelism()
-                        .unwrap_or(NonZeroUsize::new(1).unwrap())
-                        .into(),
-                )
-                .build()
-                .unwrap(),
+            values: DashMap::with_hasher(ahash::RandomState::new()),
         }
     }
 }
 
-pub fn put(environment: Arc<Mutex<Environment>>, name: String, expr: &Expression) {
-    let (sender, receiver) = channel();
+pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr: &Expression) {
+    let key = variable_hash(name);
+    let condvar = Condvar::new();
+    environment
+        .values
+        .insert(key, PackagedObject::Pending(Mutex::new(false), condvar));
 
-    let environment_inner = environment.clone();
-    let mut env = environment.lock();
-    env.values.insert(name, PackagedObject::Pending(receiver));
+    workers.install(move || {
+        let value = eval_expression(environment.clone(), expr);
 
-    env.pool.install(move || {
-        sender
-            .send(eval_expression(environment_inner, expr))
-            .unwrap();
+        if let PackagedObject::Pending(mtx, cdv) = environment.values.get(&key).unwrap().value() {
+            *mtx.lock().unwrap() = true;
+            cdv.notify_all();
+        }
+
+        environment.values.insert(key, PackagedObject::Ready(value));
     });
 }
 
 pub fn put_immediately(
-    environment: Arc<Mutex<Environment>>,
-    name: String,
+    environment: Arc<Environment>,
+    name: &str,
     expr_or_obj: Either<&Expression, LoxObject>,
 ) {
-    environment.clone().lock().values.insert(
-        name,
+    Arc::clone(&environment).values.insert(
+        variable_hash(name),
         PackagedObject::Ready(match expr_or_obj {
             Left(expr) => eval_expression(environment, expr),
             Right(obj) => Ok(obj),
         }),
     );
+}
+
+pub fn variable_hash(name: &str) -> u64 {
+    let mut hasher = ahash::AHasher::default();
+    hasher.write(name.as_bytes());
+    hasher.finish()
 }

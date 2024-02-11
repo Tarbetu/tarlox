@@ -1,25 +1,37 @@
 mod environment;
 mod object;
 
+use rayon::{ThreadPool, ThreadPoolBuilder};
+
 use crate::syntax::expression::LoxLiteral;
 use crate::syntax::expression::Operator;
 use crate::syntax::Expression;
 use crate::syntax::Statement;
 use crate::LoxResult;
+use crate::TokenType;
 pub use environment::Environment;
 use object::LoxObject;
 
-use parking_lot::Mutex;
 use std::sync::Arc;
+use std::{num::NonZeroUsize, thread::available_parallelism};
 
 pub struct Executor {
-    global: Arc<Mutex<Environment>>,
+    global: Arc<Environment>,
+    workers: ThreadPool,
 }
 
 impl<'a> Executor {
     pub fn new() -> Executor {
         Self {
-            global: Arc::new(Mutex::new(Environment::new())),
+            global: Arc::new(Environment::new()),
+            workers: ThreadPoolBuilder::new()
+                .num_threads(
+                    available_parallelism()
+                        .unwrap_or(NonZeroUsize::new(1).unwrap())
+                        .into(),
+                )
+                .build()
+                .unwrap(),
         }
     }
 
@@ -36,29 +48,36 @@ impl<'a> Executor {
 
         match stmt {
             StmtExpression(expr) => {
-                eval_expression(self.global.clone(), expr)?;
+                eval_expression(Arc::clone(&self.global), expr)?;
 
                 Ok(())
             }
             Print(expr) => {
-                let res = eval_expression(self.global.clone(), expr)?;
+                let res = eval_expression(Arc::clone(&self.global), expr)?;
 
                 println!("{}", res.to_string());
                 Ok(())
             }
-            Ready(_expr) => {
-                // If expr is a identifier, check if it's accessable
-                unimplemented!()
-            }
             Var(token, initializer) => {
                 if let Some(expr) = initializer {
-                    environment::put(self.global.clone(), token.to_string(), expr);
+                    environment::put(
+                        Arc::clone(&self.global),
+                        &self.workers,
+                        match &token.kind {
+                            TokenType::Identifier(name) => name,
+                            _ => unreachable!(),
+                        },
+                        expr,
+                    );
 
                     Ok(())
                 } else {
                     environment::put_immediately(
-                        self.global.clone(),
-                        token.to_string(),
+                        Arc::clone(&self.global),
+                        match &token.kind {
+                            TokenType::Identifier(name) => name,
+                            _ => unreachable!(),
+                        },
                         either::Either::Right(LoxObject::Nil),
                     );
 
@@ -69,10 +88,7 @@ impl<'a> Executor {
     }
 }
 
-fn eval_expression(
-    environment: Arc<Mutex<Environment>>,
-    expr: &Expression,
-) -> LoxResult<LoxObject> {
+fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResult<LoxObject> {
     use Expression::*;
     use LoxLiteral::*;
 
@@ -115,26 +131,29 @@ fn eval_expression(
             use environment::PackagedObject;
 
             if let Identifier(name) = &token.kind {
-                dbg!(&environment);
-                let mut locked_env = environment.lock();
-                let result = locked_env.values.get_mut(name);
-                if let Some(packaged_obj) = result {
-                    match packaged_obj {
-                        PackagedObject::Pending(rec) => {
-                            let res = rec.recv()??;
-                            *packaged_obj = PackagedObject::Ready(Ok((&res).into()));
-                            Ok(res)
+                loop {
+                    let result = environment.values.get(&environment::variable_hash(name));
+                    if let Some(packaged_obj) = result {
+                        match packaged_obj.value() {
+                            PackagedObject::Pending(mtx, cvar) => {
+                                let mut res = mtx.lock().unwrap();
+
+                                while !*res {
+                                    res = cvar.wait(res).unwrap();
+                                }
+                            }
+                            PackagedObject::Ready(val) => match val {
+                                Ok(obj) => return Ok((obj).into()),
+                                // Make this better in future
+                                Err(e) => return Err(e.clone()),
+                            },
                         }
-                        PackagedObject::Ready(val) => match val {
-                            Ok(obj) => Ok((&*obj).into()),
-                            Err(e) => Err(e.clone()),
-                        },
+                    } else {
+                        return Err(LoxError::RuntimeError {
+                            line: Some(token.line),
+                            msg: "Undefined Variable".into(),
+                        });
                     }
-                } else {
-                    Err(LoxError::RuntimeError {
-                        line: Some(token.line),
-                        msg: "Undefined Variable".into(),
-                    })
                 }
             } else {
                 Err(LoxError::InternalError(format!(

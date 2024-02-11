@@ -84,8 +84,6 @@ impl<'a> Parser<'a> {
 
         if self.is_match(&[Print]) {
             self.print_statement()
-        } else if self.is_match(&[Ready]) {
-            self.ready_statement()
         } else {
             self.expression_statement()
         }
@@ -105,14 +103,6 @@ impl<'a> Parser<'a> {
         return_if_cant_consume!(self, TokenType::Semicolon);
 
         Ok(Statement::StmtExpression(expr))
-    }
-
-    fn ready_statement(&mut self) -> LoxResult<Statement> {
-        let expr = self.expression()?;
-
-        return_if_cant_consume!(self, TokenType::Semicolon);
-
-        Ok(Statement::Ready(expr))
     }
 
     fn expression(&mut self) -> LoxResult<Expression> {

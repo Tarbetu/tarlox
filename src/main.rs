@@ -6,7 +6,7 @@ mod syntax;
 pub use crate::errors::LoxError;
 pub use crate::errors::LoxResult;
 pub use crate::scanner::{Token, TokenType};
-use executor::Environment;
+use executor::Executor;
 use scanner::Scanner;
 use std::env;
 use std::process;
@@ -29,7 +29,8 @@ async fn main() {
         Equal => {
             let path = &args.next().unwrap();
             if let Ok(source_code) = fs::read_to_string(path).await {
-                if let Err(e) = run(&source_code).await {
+                let mut exe = Executor::new();
+                if let Err(e) = run(&source_code, &mut exe).await {
                     println!("{e}");
                     process::exit(65)
                 }
@@ -47,6 +48,7 @@ async fn main() {
 async fn run_prompt() {
     let mut rl = rustyline::DefaultEditor::new().unwrap();
 
+    let mut exe = Executor::new();
     loop {
         let readline = rl.readline("Tarbetu's Lox>> ");
 
@@ -56,7 +58,7 @@ async fn run_prompt() {
                     break;
                 };
 
-                if let Err(e) = run(&input).await {
+                if let Err(e) = run(&input, &mut exe).await {
                     println!("{e}\n");
                 };
             }
@@ -65,13 +67,13 @@ async fn run_prompt() {
     }
 }
 
-async fn run(code: &str) -> LoxResult<()> {
+async fn run(code: &str, exe: &mut Executor) -> LoxResult<()> {
     let expr = {
         let tokens = Scanner::new(code).scan_tokens()?;
         Parser::new(&tokens).parse()?
     };
 
-    executor::Executor::new().execute(expr).await?;
+    exe.execute(expr).await?;
 
     Ok(())
 }

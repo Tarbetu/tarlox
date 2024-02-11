@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ahash = { version = "0.8.7", default-features = false, features = ["const-random", "compile-time-rng", "std"] }
+ahash = { version = "0.8.8", features = ["compile-time-rng", "std"] }
 async-recursion = "1.0.5"
+dashmap = { version = "5.5.3", features = ["rayon"] }
 either = "1.9.0"
-parking_lot = "0.12.1"
 rayon = "1.8.1"
 rug = "1.24.0"
 rustyline = "13.0.0"
