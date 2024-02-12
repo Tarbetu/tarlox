@@ -136,11 +136,9 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                     if let Some(packaged_obj) = result {
                         match packaged_obj.value() {
                             PackagedObject::Pending(mtx, cvar) => {
-                                let mut res = mtx.lock().unwrap();
+                                let res = mtx.lock().unwrap();
 
-                                while !*res {
-                                    res = cvar.wait(res).unwrap();
-                                }
+                                let _ = cvar.wait_while(res, |pending| !*pending);
                             }
                             PackagedObject::Ready(val) => match val {
                                 Ok(obj) => return Ok((obj).into()),
