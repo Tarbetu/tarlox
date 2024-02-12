@@ -72,6 +72,7 @@ pub enum Operator {
     SmallerOrEqual,
     Greater,
     GreaterOrEqual,
+    IsReady,
 }
 
 // Not your best solution
@@ -91,6 +92,7 @@ impl TryInto<Operator> for &Token {
             TokenType::Less => Ok(Operator::Smaller),
             TokenType::GreaterEqual => Ok(Operator::GreaterOrEqual),
             TokenType::LessEqual => Ok(Operator::SmallerOrEqual),
+            TokenType::IsReady => Ok(Operator::IsReady),
             _ => Err(LoxError::InternalError(
                 "Unmatched TokenType for operator".into(),
             )),
@@ -118,6 +120,7 @@ impl Display for Operator {
                 SmallerOrEqual => "<=",
                 Greater => ">",
                 GreaterOrEqual => ">=",
+                IsReady => "is_ready",
             }
         )
     }

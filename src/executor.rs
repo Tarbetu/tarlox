@@ -3,12 +3,15 @@ mod object;
 
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
+use crate::executor::environment::PackagedObject;
 use crate::syntax::expression::LoxLiteral;
 use crate::syntax::expression::Operator;
 use crate::syntax::Expression;
 use crate::syntax::Statement;
+use crate::LoxError;
 use crate::LoxResult;
 use crate::TokenType;
+use crate::TokenType::*;
 pub use environment::Environment;
 use object::LoxObject;
 
@@ -98,6 +101,29 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
         Literal(LoxString(s)) => Ok(LoxObject::from(s.as_str())),
         Literal(Bool(b)) => Ok(LoxObject::from(*b)),
         Literal(Nil) => Ok(LoxObject::Nil),
+        Unary(Operator::IsReady, right) => {
+            if let Variable(tkn) = right.as_ref() {
+                if let TokenType::Identifier(name) = &tkn.kind {
+                    let name = environment::variable_hash(name);
+                    if let Some(var) = environment.values.get(&name) {
+                        match var.value() {
+                            PackagedObject::Ready(_) => Ok(LoxObject::from(true)),
+                            PackagedObject::Pending(..) => Ok(LoxObject::from(false)),
+                        }
+                    } else {
+                        Err(LoxError::RuntimeError {
+                            line: Some(tkn.line),
+                            msg: "Undefined Variable".into(),
+                        })
+                    }
+                } else {
+                    unreachable!()
+                }
+            } else {
+                // R-values are always ready
+                Ok(LoxObject::from(true))
+            }
+        }
         Unary(operator, right) => {
             let right = eval_expression(environment, right)?;
 
@@ -126,10 +152,6 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
             }
         }
         Variable(token) => {
-            use crate::LoxError;
-            use crate::TokenType::*;
-            use environment::PackagedObject;
-
             if let Identifier(name) = &token.kind {
                 loop {
                     let result = environment.values.get(&environment::variable_hash(name));

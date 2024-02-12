@@ -172,7 +172,7 @@ impl<'a> Parser<'a> {
     fn unary(&mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
-        if self.is_match(&[Bang, Minus]) {
+        if self.is_match(&[Bang, Minus, IsReady]) {
             let operator = self.previous().try_into()?;
             let right = self.unary()?;
 
