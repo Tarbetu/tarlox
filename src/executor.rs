@@ -163,7 +163,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                                 let _ = cvar.wait_while(res, |pending| !*pending);
                             }
                             PackagedObject::Ready(val) => match val {
-                                Ok(obj) => return Ok((obj).into()),
+                                Ok(obj) => return Ok(LoxObject::from(obj)),
                                 // Make this better in future
                                 Err(e) => return Err(e.clone()),
                             },
@@ -179,6 +179,27 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                 Err(LoxError::InternalError(format!(
                     "Unexcepted Token! Excepted Identifier found {:?}",
                     token.kind
+                )))
+            }
+        }
+        Assign(name_tkn, value_expr) => {
+            use either::Either;
+
+            if let Identifier(name) = &name_tkn.kind {
+                let val = eval_expression(Arc::clone(&environment), &value_expr);
+                environment::put_immediately(
+                    environment,
+                    name,
+                    Either::Right(match val {
+                        Ok(ref obj) => LoxObject::from(obj),
+                        err => return err,
+                    }),
+                );
+                val
+            } else {
+                Err(LoxError::InternalError(format!(
+                    "Unexcepted Token! Excepted Identifier found {:?}",
+                    name_tkn.kind
                 )))
             }
         }

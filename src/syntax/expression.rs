@@ -11,6 +11,7 @@ pub enum Expression {
     Grouping(Box<Expression>),
     Literal(LoxLiteral),
     Variable(Token),
+    Assign(Token, Box<Expression>),
 }
 
 impl Display for Expression {
@@ -31,7 +32,10 @@ impl Display for Expression {
                 write!(f, "{literal}")
             }
             Variable(token) => {
-                write!(f, "{token}")
+                write!(f, "(var {token})")
+            }
+            Assign(token, value) => {
+                write!(f, "(assign {token} {value})")
             }
         }
     }

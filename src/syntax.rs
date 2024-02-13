@@ -106,10 +106,29 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&mut self) -> LoxResult<Expression> {
-        self.equality()
+        self.assignment()
     }
 
-    // These methods can be handled via macros
+    fn assignment(&mut self) -> LoxResult<Expression> {
+        use TokenType::Equal;
+
+        let expr = self.equality()?;
+
+        if self.is_match(&[Equal]) {
+            let value = self.assignment()?;
+
+            if let Expression::Variable(name) = expr {
+                return Ok(Expression::Assign(name, value.into()));
+            } else {
+                return Err(LoxError::ParseError {
+                    line: Some(self.previous().line),
+                    msg: "Invalid assignment target.".to_string(),
+                });
+            }
+        }
+
+        Ok(expr)
+    }
 
     fn equality(&mut self) -> LoxResult<Expression> {
         use TokenType::*;

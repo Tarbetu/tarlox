@@ -57,7 +57,7 @@ pub fn put_immediately(
         variable_hash(name),
         PackagedObject::Ready(match expr_or_obj {
             Left(expr) => eval_expression(environment, expr),
-            Right(obj) => Ok(obj),
+            Right(obj) => Ok(obj.into()),
         }),
     );
 }
