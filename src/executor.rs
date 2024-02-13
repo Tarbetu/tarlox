@@ -25,7 +25,7 @@ pub struct Executor {
     workers: ThreadPool,
 }
 
-impl<'a> Executor {
+impl Executor {
     pub fn new() -> Executor {
         Self {
             environment: Arc::new(Environment::new()),
@@ -41,7 +41,7 @@ impl<'a> Executor {
     }
 
     #[async_recursion]
-    pub async fn execute(&mut self, statements: &Vec<Statement>) -> LoxResult<()> {
+    pub async fn execute(&mut self, statements: &[Statement]) -> LoxResult<()> {
         for statement in statements {
             self.eval_statement(statement).await?;
         }
@@ -49,6 +49,7 @@ impl<'a> Executor {
         Ok(())
     }
 
+    #[async_recursion]
     async fn eval_statement(&mut self, stmt: &Statement) -> LoxResult<()> {
         use Statement::*;
 
@@ -111,6 +112,17 @@ impl<'a> Executor {
                 self.environment = previous;
 
                 res
+            }
+            If(condition, then_branch, else_branch) => {
+                let condition = bool::from(&eval_expression(self.environment.clone(), condition)?);
+
+                if condition {
+                    self.eval_statement(then_branch).await?;
+                } else if else_branch.is_some() {
+                    self.eval_statement(else_branch.as_ref().unwrap()).await?;
+                }
+
+                Ok(())
             }
         }
     }
@@ -227,6 +239,19 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                     name_tkn.kind
                 )))
             }
+        }
+        Logical(right, operator, left) => {
+            let left = eval_expression(Arc::clone(&environment), left)?;
+
+            if let Operator::Or = operator {
+                if bool::from(&left) {
+                    return Ok(left);
+                }
+            } else if !bool::from(&left) {
+                return Ok(left);
+            }
+
+            eval_expression(environment, right)
         }
     }
 }

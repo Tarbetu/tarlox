@@ -96,13 +96,39 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> LoxResult<Statement> {
         use TokenType::*;
 
-        if self.is_match(&[Print]) {
+        if self.is_match(&[If]) {
+            self.if_statement()
+        } else if self.is_match(&[Print]) {
             self.print_statement()
         } else if self.is_match(&[LeftBrace]) {
             self.block_statement()
         } else {
             self.expression_statement()
         }
+    }
+
+    fn if_statement(&mut self) -> LoxResult<Statement> {
+        use TokenType::*;
+
+        return_if_cant_consume!(self, LeftParen);
+
+        let condition = self.expression()?;
+
+        return_if_cant_consume!(self, RightParen);
+
+        let then_branch = self.statement()?;
+
+        let mut else_branch = None;
+
+        if self.is_match(&[Else]) {
+            else_branch = Some(self.statement()?);
+        }
+
+        Ok(Statement::If(
+            condition,
+            then_branch.into(),
+            else_branch.map(|i| i.into()),
+        ))
     }
 
     fn print_statement(&mut self) -> LoxResult<Statement> {
@@ -140,7 +166,7 @@ impl<'a> Parser<'a> {
     fn assignment(&mut self) -> LoxResult<Expression> {
         use TokenType::Equal;
 
-        let expr = self.equality()?;
+        let expr = self.or()?;
 
         if self.is_match(&[Equal]) {
             let value = self.assignment()?;
@@ -153,6 +179,36 @@ impl<'a> Parser<'a> {
                     msg: "Invalid assignment target.".to_string(),
                 });
             }
+        }
+
+        Ok(expr)
+    }
+
+    fn or(&mut self) -> LoxResult<Expression> {
+        use TokenType::Or;
+
+        let mut expr = self.and()?;
+
+        while self.is_match(&[Or]) {
+            let operator = self.previous().try_into()?;
+
+            let right = self.and()?;
+            expr = Expression::Logical(expr.into(), operator, right.into());
+        }
+
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> LoxResult<Expression> {
+        use TokenType::And;
+
+        let mut expr = self.equality()?;
+
+        while self.is_match(&[And]) {
+            let operator = self.previous().try_into()?;
+
+            let right = self.equality()?;
+            expr = Expression::Logical(expr.into(), operator, right.into());
         }
 
         Ok(expr)

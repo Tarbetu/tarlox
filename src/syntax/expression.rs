@@ -10,6 +10,7 @@ pub enum Expression {
     Unary(Operator, Box<Expression>),
     Grouping(Box<Expression>),
     Literal(LoxLiteral),
+    Logical(Box<Expression>, Operator, Box<Expression>),
     Variable(Token),
     Assign(Token, Box<Expression>),
 }
@@ -36,6 +37,9 @@ impl Display for Expression {
             }
             Assign(token, value) => {
                 write!(f, "(assign {token} {value})")
+            }
+            Logical(left, operator, right) => {
+                write!(f, "({operator} {left} {right})")
             }
         }
     }
@@ -77,6 +81,8 @@ pub enum Operator {
     Greater,
     GreaterOrEqual,
     IsReady,
+    Or,
+    And,
 }
 
 // Not your best solution
@@ -97,6 +103,8 @@ impl TryInto<Operator> for &Token {
             TokenType::GreaterEqual => Ok(Operator::GreaterOrEqual),
             TokenType::LessEqual => Ok(Operator::SmallerOrEqual),
             TokenType::IsReady => Ok(Operator::IsReady),
+            TokenType::And => Ok(Operator::And),
+            TokenType::Or => Ok(Operator::Or),
             _ => Err(LoxError::InternalError(
                 "Unmatched TokenType for operator".into(),
             )),
@@ -125,6 +133,8 @@ impl Display for Operator {
                 Greater => ">",
                 GreaterOrEqual => ">=",
                 IsReady => "is_ready",
+                And => "and",
+                Or => "or",
             }
         )
     }

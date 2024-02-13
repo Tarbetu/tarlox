@@ -9,4 +9,6 @@ pub enum Statement {
     Var(Token, Option<Expression>),
     AwaitVar(Token, Expression),
     Block(Vec<Statement>),
+    // Boolean        If Branch      Else Branch
+    If(Expression, Box<Statement>, Option<Box<Statement>>),
 }
