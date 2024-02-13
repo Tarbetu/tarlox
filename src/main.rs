@@ -73,7 +73,7 @@ async fn run(code: &str, exe: &mut Executor) -> LoxResult<()> {
         Parser::new(&tokens).parse()?
     };
 
-    exe.execute(expr).await?;
+    exe.execute(&expr).await?;
 
     Ok(())
 }

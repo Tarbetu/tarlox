@@ -98,6 +98,8 @@ impl<'a> Parser<'a> {
 
         if self.is_match(&[Print]) {
             self.print_statement()
+        } else if self.is_match(&[LeftBrace]) {
+            self.block_statement()
         } else {
             self.expression_statement()
         }
@@ -109,6 +111,18 @@ impl<'a> Parser<'a> {
         return_if_cant_consume!(self, TokenType::Semicolon);
 
         Ok(Statement::Print(expr))
+    }
+
+    fn block_statement(&mut self) -> LoxResult<Statement> {
+        let mut statements = vec![];
+
+        while !self.check(&TokenType::RightBrace) && self.peek().is_some() {
+            statements.push(self.declaration()?);
+        }
+
+        return_if_cant_consume!(self, TokenType::RightBrace);
+
+        Ok(Statement::Block(statements))
     }
 
     fn expression_statement(&mut self) -> LoxResult<Statement> {
@@ -337,6 +351,11 @@ mod tests {
         Parser::new(&Scanner::new(source).scan_tokens().unwrap()).expression()
     }
 
+    fn create_statement(source: &str) -> LoxResult<Statement> {
+        use crate::Scanner;
+        Parser::new(&Scanner::new(source).scan_tokens().unwrap()).declaration()
+    }
+
     fn create_number(value: i32) -> Box<Expression> {
         Box::new(Expression::Literal(LoxLiteral::Number(Float::with_val(
             NUMBER_PREC,
@@ -376,8 +395,13 @@ mod tests {
         assert!(create_expression("+4").is_err())
     }
 
+    // #[test]
+    // fn test_not_expression() {
+    //     assert!(create_expression("Tarbetu is best!").is_err())
+    // }
+
     #[test]
-    fn test_not_expression() {
-        assert!(create_expression("Tarbetu is best!").is_err())
+    fn test_block_statement() {
+        assert_eq!(create_statement("{}").unwrap(), Statement::Block(vec![]))
     }
 }

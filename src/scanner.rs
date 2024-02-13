@@ -228,7 +228,7 @@ impl<'a> Scanner<'a> {
                 "var" => Var,
                 "while" => While,
                 "is_ready" => IsReady,
-                "await" => AwaitVar,
+                "await_var" => AwaitVar,
                 _ => Identifier(string),
             }
         };
@@ -244,8 +244,7 @@ mod tests {
     use TokenType::*;
 
     fn get_tokens(source: &'static str) -> LoxResult<Vec<Token>> {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async { Scanner::new(source).scan_tokens() })
+        Scanner::new(source).scan_tokens()
     }
 
     fn convert_tokens_into_token_types(tokens: Vec<Token>) -> Vec<TokenType> {

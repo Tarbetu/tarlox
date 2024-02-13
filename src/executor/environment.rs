@@ -17,12 +17,12 @@ pub enum PackagedObject {
 }
 
 #[derive(Debug)]
-pub struct Environment<'a> {
-    pub enclosing: Option<&'a Environment<'a>>,
-    pub values: DashMap<u64, PackagedObject, ahash::RandomState>,
+pub struct Environment {
+    pub enclosing: Option<Arc<Environment>>,
+    values: DashMap<u64, PackagedObject, ahash::RandomState>,
 }
 
-impl<'a> Environment<'a> {
+impl Environment {
     pub fn new() -> Self {
         Self {
             values: DashMap::with_hasher(ahash::RandomState::new()),
@@ -30,7 +30,7 @@ impl<'a> Environment<'a> {
         }
     }
 
-    pub fn new_with_parent(enclosing: &'a Environment) -> Self {
+    pub fn new_with_parent(enclosing: Arc<Environment>) -> Self {
         Self {
             enclosing: Some(enclosing),
             values: DashMap::with_hasher(ahash::RandomState::new()),
@@ -39,11 +39,20 @@ impl<'a> Environment<'a> {
 
     pub fn get(
         &self,
-        name: &str,
+        key: &u64,
     ) -> Option<dashmap::mapref::one::Ref<'_, u64, PackagedObject, ahash::RandomState>> {
-        let key = variable_hash(name);
-        self.values.get(&key).or_else(|| match self.enclosing {
-            Some(env) => env.values.get(&key),
+        self.values.get(key).or(match &self.enclosing {
+            Some(env) => env.get(key),
+            None => None,
+        })
+    }
+
+    pub fn get_mut(
+        &self,
+        key: &u64,
+    ) -> Option<dashmap::mapref::one::RefMut<'_, u64, PackagedObject, ahash::RandomState>> {
+        self.values.get_mut(key).or(match &self.enclosing {
+            Some(env) => env.get_mut(key),
             None => None,
         })
     }
@@ -77,7 +86,7 @@ pub fn put_immediately(
         variable_hash(name),
         PackagedObject::Ready(match expr_or_obj {
             Left(expr) => eval_expression(environment, expr),
-            Right(obj) => Ok(obj.into()),
+            Right(obj) => Ok(obj),
         }),
     );
 }

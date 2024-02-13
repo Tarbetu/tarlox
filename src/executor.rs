@@ -1,6 +1,7 @@
 mod environment;
 mod object;
 
+use async_recursion::async_recursion;
 use either::Either;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
@@ -20,14 +21,14 @@ use std::sync::Arc;
 use std::{num::NonZeroUsize, thread::available_parallelism};
 
 pub struct Executor {
-    global: Arc<Environment<'static>>,
+    environment: Arc<Environment>,
     workers: ThreadPool,
 }
 
 impl<'a> Executor {
     pub fn new() -> Executor {
         Self {
-            global: Arc::new(Environment::new()),
+            environment: Arc::new(Environment::new()),
             workers: ThreadPoolBuilder::new()
                 .num_threads(
                     available_parallelism()
@@ -39,9 +40,10 @@ impl<'a> Executor {
         }
     }
 
-    pub async fn execute(&mut self, statements: Vec<Statement>) -> LoxResult<()> {
+    #[async_recursion]
+    pub async fn execute(&mut self, statements: &Vec<Statement>) -> LoxResult<()> {
         for statement in statements {
-            self.eval_statement(&statement).await?;
+            self.eval_statement(statement).await?;
         }
 
         Ok(())
@@ -52,12 +54,12 @@ impl<'a> Executor {
 
         match stmt {
             StmtExpression(expr) => {
-                eval_expression(Arc::clone(&self.global), expr)?;
+                eval_expression(Arc::clone(&self.environment), expr)?;
 
                 Ok(())
             }
             Print(expr) => {
-                let res = eval_expression(Arc::clone(&self.global), expr)?;
+                let res = eval_expression(Arc::clone(&self.environment), expr)?;
 
                 println!("{}", res.to_string());
                 Ok(())
@@ -65,7 +67,7 @@ impl<'a> Executor {
             Var(token, initializer) => {
                 if let Some(expr) = initializer {
                     environment::put(
-                        Arc::clone(&self.global),
+                        Arc::clone(&self.environment),
                         &self.workers,
                         match &token.kind {
                             TokenType::Identifier(name) => name,
@@ -77,7 +79,7 @@ impl<'a> Executor {
                     Ok(())
                 } else {
                     environment::put_immediately(
-                        Arc::clone(&self.global),
+                        Arc::clone(&self.environment),
                         match &token.kind {
                             TokenType::Identifier(name) => name,
                             _ => unreachable!(),
@@ -90,7 +92,7 @@ impl<'a> Executor {
             }
             AwaitVar(token, initializer) => {
                 environment::put_immediately(
-                    Arc::clone(&self.global),
+                    Arc::clone(&self.environment),
                     match &token.kind {
                         TokenType::Identifier(name) => name,
                         _ => unreachable!(),
@@ -99,6 +101,16 @@ impl<'a> Executor {
                 );
 
                 Ok(())
+            }
+            Block(statements) => {
+                let previous = Arc::clone(&self.environment);
+                self.environment = Arc::new(Environment::new_with_parent(Arc::clone(&previous)));
+
+                let res = self.execute(statements).await;
+
+                self.environment = previous;
+
+                res
             }
         }
     }
@@ -118,7 +130,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
             if let Variable(tkn) = right.as_ref() {
                 if let TokenType::Identifier(name) = &tkn.kind {
                     let name = environment::variable_hash(name);
-                    if let Some(var) = environment.values.get(&name) {
+                    if let Some(var) = environment.get(&name) {
                         match var.value() {
                             PackagedObject::Ready(_) => Ok(LoxObject::from(true)),
                             PackagedObject::Pending(..) => Ok(LoxObject::from(false)),
@@ -167,7 +179,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
         Variable(token) => {
             if let Identifier(name) = &token.kind {
                 loop {
-                    let result = environment.get(name);
+                    let result = environment.get(&environment::variable_hash(name));
                     if let Some(packaged_obj) = result {
                         match packaged_obj.value() {
                             PackagedObject::Pending(mtx, cvar) => {
@@ -197,23 +209,18 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
         }
         Assign(name_tkn, value_expr) => {
             if let Identifier(name) = &name_tkn.kind {
-                if environment.get(name).is_none() {
-                    return Err(LoxError::RuntimeError {
+                if let Some(mut var) =
+                    Arc::clone(&environment).get_mut(&environment::variable_hash(name))
+                {
+                    let val = eval_expression(environment, value_expr)?;
+                    *var = PackagedObject::Ready(Ok(LoxObject::from(&val)));
+                    Ok(val)
+                } else {
+                    Err(LoxError::RuntimeError {
                         line: Some(name_tkn.line),
                         msg: "Undefined Variable".into(),
-                    });
+                    })
                 }
-
-                let val = eval_expression(Arc::clone(&environment), value_expr);
-                environment::put_immediately(
-                    environment,
-                    name,
-                    Either::Right(match val {
-                        Ok(ref obj) => LoxObject::from(obj),
-                        err => return err,
-                    }),
-                );
-                val
             } else {
                 Err(LoxError::InternalError(format!(
                     "Unexcepted Token! Excepted Identifier found {:?}",
