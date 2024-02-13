@@ -82,7 +82,8 @@ impl<'a> Parser<'a> {
                     Some(init) => Ok(Statement::AwaitVar(name, init)),
                     None => Err(LoxError::ParseError {
                         line: Some(name.line),
-                        msg: "Await expects initializer".into(),
+                        msg: "Await expects initializer. Use 'Var' syntax without initializer."
+                            .into(),
                     }),
                 },
                 _ => unreachable!(),
