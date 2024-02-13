@@ -33,16 +33,16 @@ impl Display for LoxError {
             }
             RuntimeError { line, msg } => {
                 if let Some(l) = line {
-                    write!(f, "[Runtime Error: Error at {l}. {msg}]")
+                    write!(f, "[Runtime Error: Error at {l} - {msg}]")
                 } else {
-                    write!(f, "[Runtime Error: Error at end. {msg}]")
+                    write!(f, "[Runtime Error: Error at end - {msg}]")
                 }
             }
             ParseError { line, msg } => {
                 if let Some(l) = line {
-                    write!(f, "[Parse Error: Error at {l}. {msg}]")
+                    write!(f, "[Parse Error: Error at {l} - {msg}]")
                 } else {
-                    write!(f, "[Parse Error: Error at end. {msg}]")
+                    write!(f, "[Parse Error: Error at end - {msg}]")
                 }
             }
             ExceptedExpression(line) => {

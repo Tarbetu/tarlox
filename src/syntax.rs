@@ -50,16 +50,18 @@ impl<'a> Parser<'a> {
     }
 
     fn declaration(&mut self) -> LoxResult<Statement> {
-        use TokenType::Var;
+        use TokenType::{AwaitVar, Var};
 
         if self.is_match(&[Var]) {
-            return self.var_declaration();
+            return self.var_declaration(Var);
+        } else if self.is_match(&[AwaitVar]) {
+            return self.var_declaration(AwaitVar);
         }
 
         self.statement()
     }
 
-    fn var_declaration(&mut self) -> LoxResult<Statement> {
+    fn var_declaration(&mut self, token_type: TokenType) -> LoxResult<Statement> {
         let name_result = self
             .consume(TokenType::Identifier(String::new()))
             .map(|token| token.to_owned());
@@ -73,7 +75,18 @@ impl<'a> Parser<'a> {
 
             return_if_cant_consume!(self, TokenType::Semicolon);
 
-            Ok(Statement::Var(name, initializer))
+            use TokenType::{AwaitVar, Var};
+            match token_type {
+                Var => Ok(Statement::Var(name, initializer)),
+                AwaitVar => match initializer {
+                    Some(init) => Ok(Statement::AwaitVar(name, init)),
+                    None => Err(LoxError::ParseError {
+                        line: Some(name.line),
+                        msg: "Await expects initializer".into(),
+                    }),
+                },
+                _ => unreachable!(),
+            }
         } else {
             Err(name_result.unwrap_err().into_lox_error(0, None, None))
         }

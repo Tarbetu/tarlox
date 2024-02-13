@@ -1,6 +1,7 @@
 mod environment;
 mod object;
 
+use either::Either;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
 use crate::executor::environment::PackagedObject;
@@ -81,11 +82,23 @@ impl<'a> Executor {
                             TokenType::Identifier(name) => name,
                             _ => unreachable!(),
                         },
-                        either::Either::Right(LoxObject::Nil),
+                        Either::Right(LoxObject::Nil),
                     );
 
                     Ok(())
                 }
+            }
+            AwaitVar(token, initializer) => {
+                environment::put_immediately(
+                    Arc::clone(&self.global),
+                    match &token.kind {
+                        TokenType::Identifier(name) => name,
+                        _ => unreachable!(),
+                    },
+                    Either::Left(initializer),
+                );
+
+                Ok(())
             }
         }
     }
@@ -183,10 +196,19 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
             }
         }
         Assign(name_tkn, value_expr) => {
-            use either::Either;
-
             if let Identifier(name) = &name_tkn.kind {
-                let val = eval_expression(Arc::clone(&environment), &value_expr);
+                if environment
+                    .values
+                    .get(&environment::variable_hash(name))
+                    .is_none()
+                {
+                    return Err(LoxError::RuntimeError {
+                        line: Some(name_tkn.line),
+                        msg: "Undefined Variable".into(),
+                    });
+                }
+
+                let val = eval_expression(Arc::clone(&environment), value_expr);
                 environment::put_immediately(
                     environment,
                     name,

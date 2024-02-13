@@ -43,6 +43,7 @@ pub enum TokenType {
     This,
     True,
     Var,
+    AwaitVar,
     While,
 
     #[allow(clippy::upper_case_acronyms)]
