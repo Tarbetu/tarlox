@@ -17,15 +17,35 @@ pub enum PackagedObject {
 }
 
 #[derive(Debug)]
-pub struct Environment {
+pub struct Environment<'a> {
+    pub enclosing: Option<&'a Environment<'a>>,
     pub values: DashMap<u64, PackagedObject, ahash::RandomState>,
 }
 
-impl Environment {
+impl<'a> Environment<'a> {
     pub fn new() -> Self {
         Self {
             values: DashMap::with_hasher(ahash::RandomState::new()),
+            enclosing: None,
         }
+    }
+
+    pub fn new_with_parent(enclosing: &'a Environment) -> Self {
+        Self {
+            enclosing: Some(enclosing),
+            values: DashMap::with_hasher(ahash::RandomState::new()),
+        }
+    }
+
+    pub fn get(
+        &self,
+        name: &str,
+    ) -> Option<dashmap::mapref::one::Ref<'_, u64, PackagedObject, ahash::RandomState>> {
+        let key = variable_hash(name);
+        self.values.get(&key).or_else(|| match self.enclosing {
+            Some(env) => env.values.get(&key),
+            None => None,
+        })
     }
 }
 

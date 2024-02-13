@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::{num::NonZeroUsize, thread::available_parallelism};
 
 pub struct Executor {
-    global: Arc<Environment>,
+    global: Arc<Environment<'static>>,
     workers: ThreadPool,
 }
 
@@ -167,7 +167,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
         Variable(token) => {
             if let Identifier(name) = &token.kind {
                 loop {
-                    let result = environment.values.get(&environment::variable_hash(name));
+                    let result = environment.get(name);
                     if let Some(packaged_obj) = result {
                         match packaged_obj.value() {
                             PackagedObject::Pending(mtx, cvar) => {
@@ -197,11 +197,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
         }
         Assign(name_tkn, value_expr) => {
             if let Identifier(name) = &name_tkn.kind {
-                if environment
-                    .values
-                    .get(&environment::variable_hash(name))
-                    .is_none()
-                {
+                if environment.get(name).is_none() {
                     return Err(LoxError::RuntimeError {
                         line: Some(name_tkn.line),
                         msg: "Undefined Variable".into(),
