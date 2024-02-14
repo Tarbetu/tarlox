@@ -100,6 +100,8 @@ impl<'a> Parser<'a> {
             self.if_statement()
         } else if self.is_match(&[Print]) {
             self.print_statement()
+        } else if self.is_match(&[While]) {
+            self.while_statement()
         } else if self.is_match(&[LeftBrace]) {
             self.block_statement()
         } else {
@@ -137,6 +139,15 @@ impl<'a> Parser<'a> {
         return_if_cant_consume!(self, TokenType::Semicolon);
 
         Ok(Statement::Print(expr))
+    }
+
+    fn while_statement(&mut self) -> LoxResult<Statement> {
+        return_if_cant_consume!(self, TokenType::LeftParen);
+        let condition = self.expression()?;
+        return_if_cant_consume!(self, TokenType::RightParen);
+        let body = self.statement()?;
+
+        Ok(Statement::While(condition, body.into()))
     }
 
     fn block_statement(&mut self) -> LoxResult<Statement> {

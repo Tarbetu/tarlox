@@ -5,10 +5,10 @@ use std::hash::Hasher;
 use std::sync::Mutex;
 use std::sync::{Arc, Condvar};
 
-use crate::{syntax::Expression, LoxResult};
-
 use super::eval_expression;
 use super::object::LoxObject;
+use crate::syntax::Expression;
+use crate::LoxResult;
 
 #[derive(Debug)]
 pub enum PackagedObject {
@@ -19,7 +19,7 @@ pub enum PackagedObject {
 #[derive(Debug)]
 pub struct Environment {
     pub enclosing: Option<Arc<Environment>>,
-    values: DashMap<u64, PackagedObject, ahash::RandomState>,
+    pub values: DashMap<u64, PackagedObject, ahash::RandomState>,
 }
 
 impl Environment {
@@ -47,28 +47,53 @@ impl Environment {
         })
     }
 
-    pub fn get_mut(
-        &self,
-        key: &u64,
-    ) -> Option<dashmap::mapref::one::RefMut<'_, u64, PackagedObject, ahash::RandomState>> {
-        self.values.get_mut(key).or(match &self.enclosing {
-            Some(env) => env.get_mut(key),
-            None => None,
-        })
-    }
+    // pub fn get_mut(
+    //     &self,
+    //     key: &u64,
+    // ) -> Option<dashmap::mapref::one::RefMut<'_, u64, PackagedObject, ahash::RandomState>> {
+    //     self.values.get_mut(key).or(match &self.enclosing {
+    //         Some(env) => env.get_mut(key),
+    //         None => None,
+    //     })
+    // }
+}
+
+macro_rules! create_sub_environment {
+    ($existing_key:expr, $env:expr) => {
+        match $existing_key {
+            Some((key, value)) => {
+                let new_map = DashMap::with_hasher(ahash::RandomState::new());
+                new_map.insert(key, value);
+
+                Environment {
+                    enclosing: Some(Arc::clone(&$env.clone())),
+                    values: new_map,
+                }
+                .into()
+            }
+            None => $env.clone(),
+        }
+    };
 }
 
 pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr: &Expression) {
     let key = variable_hash(name);
+
+    // To avoid deadlock, we have to remove the old value
+    let existing_key = environment.values.remove(&key);
+
     let condvar = Condvar::new();
+
     environment
         .values
         .insert(key, PackagedObject::Pending(Mutex::new(false), condvar));
 
-    workers.install(move || {
-        let value = eval_expression(environment.clone(), expr);
+    let sub_environment = create_sub_environment!(existing_key, environment);
 
-        if let PackagedObject::Pending(mtx, cdv) = environment.values.get(&key).unwrap().value() {
+    workers.install(move || {
+        let value = eval_expression(Arc::clone(&sub_environment), expr);
+
+        if let PackagedObject::Pending(mtx, cdv) = sub_environment.get(&key).unwrap().value() {
             *mtx.lock().unwrap() = true;
             cdv.notify_all();
         }
@@ -82,10 +107,16 @@ pub fn put_immediately(
     name: &str,
     expr_or_obj: Either<&Expression, LoxObject>,
 ) {
+    let key = variable_hash(name);
+    // To avoid deadlock, we have to remove the old value
+    let existing_key = environment.values.remove(&key);
+
+    let sub_environment = create_sub_environment!(existing_key, environment);
+
     Arc::clone(&environment).values.insert(
         variable_hash(name),
         PackagedObject::Ready(match expr_or_obj {
-            Left(expr) => eval_expression(environment, expr),
+            Left(expr) => eval_expression(sub_environment, expr),
             Right(obj) => Ok(obj),
         }),
     );

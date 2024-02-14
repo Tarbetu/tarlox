@@ -124,6 +124,14 @@ impl Executor {
 
                 Ok(())
             }
+            While(condition, body) => {
+                dbg!(&self.environment);
+                while bool::from(&eval_expression(Arc::clone(&self.environment), condition)?) {
+                    self.eval_statement(body).await?;
+                }
+
+                return Ok(());
+            }
         }
     }
 }
@@ -221,11 +229,18 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
         }
         Assign(name_tkn, value_expr) => {
             if let Identifier(name) = &name_tkn.kind {
-                if let Some(mut var) =
-                    Arc::clone(&environment).get_mut(&environment::variable_hash(name))
-                {
-                    let val = eval_expression(environment, value_expr)?;
-                    *var = PackagedObject::Ready(Ok(LoxObject::from(&val)));
+                let hash = environment::variable_hash(name);
+                if environment.values.contains_key(&hash) {
+                    let (key, old_val) = environment.values.remove(&hash).unwrap();
+                    let sub_env = Environment::new_with_parent(Arc::clone(&environment));
+                    sub_env.values.insert(key, old_val);
+                    let val = eval_expression(Arc::new(sub_env), value_expr)?;
+                    environment::put_immediately(
+                        environment,
+                        name,
+                        Either::Right(LoxObject::from(&val)),
+                    );
+
                     Ok(val)
                 } else {
                     Err(LoxError::RuntimeError {
