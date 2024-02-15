@@ -125,7 +125,6 @@ impl Executor {
                 Ok(())
             }
             While(condition, body) => {
-                dbg!(&self.environment);
                 while bool::from(&eval_expression(Arc::clone(&self.environment), condition)?) {
                     self.eval_statement(body).await?;
                 }
@@ -230,16 +229,23 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
         Assign(name_tkn, value_expr) => {
             if let Identifier(name) = &name_tkn.kind {
                 let hash = environment::variable_hash(name);
-                if environment.values.contains_key(&hash) {
-                    let (key, old_val) = environment.values.remove(&hash).unwrap();
-                    let sub_env = Environment::new_with_parent(Arc::clone(&environment));
+                if let Some((key, old_val)) = environment.remove(&hash) {
+                    let sub_env = Arc::new(Environment::new_with_parent(Arc::clone(&environment)));
                     sub_env.values.insert(key, old_val);
-                    let val = eval_expression(Arc::new(sub_env), value_expr)?;
-                    environment::put_immediately(
-                        environment,
-                        name,
-                        Either::Right(LoxObject::from(&val)),
-                    );
+                    let val = eval_expression(Arc::clone(&sub_env), value_expr)?;
+                    if let Some(parent_env) = &environment.enclosing {
+                        environment::put_immediately(
+                            Arc::clone(parent_env),
+                            name,
+                            Either::Right(LoxObject::from(&val)),
+                        );
+                    } else {
+                        environment::put_immediately(
+                            Arc::clone(&environment),
+                            name,
+                            Either::Right(LoxObject::from(&val)),
+                        );
+                    }
 
                     Ok(val)
                 } else {

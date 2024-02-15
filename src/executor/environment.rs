@@ -47,15 +47,12 @@ impl Environment {
         })
     }
 
-    // pub fn get_mut(
-    //     &self,
-    //     key: &u64,
-    // ) -> Option<dashmap::mapref::one::RefMut<'_, u64, PackagedObject, ahash::RandomState>> {
-    //     self.values.get_mut(key).or(match &self.enclosing {
-    //         Some(env) => env.get_mut(key),
-    //         None => None,
-    //     })
-    // }
+    pub fn remove(&self, key: &u64) -> Option<(u64, PackagedObject)> {
+        self.values.remove(key).or(match &self.enclosing {
+            Some(env) => env.remove(key),
+            None => None,
+        })
+    }
 }
 
 macro_rules! create_sub_environment {
