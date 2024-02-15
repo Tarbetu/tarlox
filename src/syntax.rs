@@ -96,7 +96,9 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> LoxResult<Statement> {
         use TokenType::*;
 
-        if self.is_match(&[If]) {
+        if self.is_match(&[For]) {
+            self.for_statement()
+        } else if self.is_match(&[If]) {
             self.if_statement()
         } else if self.is_match(&[Print]) {
             self.print_statement()
@@ -107,6 +109,58 @@ impl<'a> Parser<'a> {
         } else {
             self.expression_statement()
         }
+    }
+
+    fn for_statement(&mut self) -> LoxResult<Statement> {
+        use TokenType::*;
+
+        return_if_cant_consume!(self, LeftParen);
+
+        let initializer = {
+            if self.is_match(&[Semicolon]) {
+                None
+            } else if self.is_match(&[Var, AwaitVar]) {
+                Some(self.var_declaration(AwaitVar)?)
+            } else {
+                Some(self.expression_statement()?)
+            }
+        };
+
+        let condition = {
+            if !self.check(&Semicolon) {
+                Some(self.expression()?)
+            } else {
+                None
+            }
+        };
+
+        return_if_cant_consume!(self, Semicolon);
+
+        let increment = {
+            if !self.check(&RightParen) {
+                Some(self.expression()?)
+            } else {
+                None
+            }
+        };
+
+        return_if_cant_consume!(self, RightParen);
+
+        let mut body = self.statement()?;
+
+        if let Some(expr) = increment {
+            body = Statement::Block(vec![body, Statement::StmtExpression(expr)]);
+        }
+
+        if let Some(expr) = condition {
+            body = Statement::While(expr, body.into())
+        }
+
+        if let Some(expr) = initializer {
+            body = Statement::Block(vec![expr, body])
+        }
+
+        Ok(body)
     }
 
     fn if_statement(&mut self) -> LoxResult<Statement> {
@@ -120,11 +174,13 @@ impl<'a> Parser<'a> {
 
         let then_branch = self.statement()?;
 
-        let mut else_branch = None;
-
-        if self.is_match(&[Else]) {
-            else_branch = Some(self.statement()?);
-        }
+        let else_branch = {
+            if self.is_match(&[Else]) {
+                Some(self.statement()?)
+            } else {
+                None
+            }
+        };
 
         Ok(Statement::If(
             condition,

@@ -191,7 +191,15 @@ impl ToString for LoxObject {
         match self {
             Nil => String::from("nil"),
             LoxString(s) => String::clone(s),
-            Number(n) => n.to_string(),
+            Number(n) => {
+                if **n == Float::with_val(NUMBER_PREC, 0) {
+                    String::from('0')
+                } else {
+                    let result = n.to_string();
+                    let result = result.trim_end_matches('0').trim_end_matches('.');
+                    result.to_string()
+                }
+            }
             Boolean(b) => b.to_string(),
         }
     }
@@ -202,8 +210,8 @@ impl From<&LoxObject> for LoxObject {
         use LoxObject::*;
 
         match value {
-            LoxString(str) => LoxString(str.clone()),
-            Number(num) => Number(num.clone()),
+            LoxString(str) => LoxString(Arc::clone(str)),
+            Number(num) => Number(Arc::clone(num)),
             Boolean(bool) => Boolean(*bool),
             Nil => Nil,
         }
