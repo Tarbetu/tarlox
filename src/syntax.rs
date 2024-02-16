@@ -8,7 +8,6 @@ use crate::Token;
 use crate::TokenType;
 pub use expression::Expression;
 use expression::LoxLiteral;
-use minor_parse_error::MinorParserError;
 pub use statement::Statement;
 
 use rug::Float;
@@ -17,14 +16,6 @@ use rug::Float;
 pub struct Parser<'a> {
     tokens: &'a [Token],
     current: usize,
-}
-
-macro_rules! return_if_cant_consume {
-    ($self:expr, $token_type:expr) => {
-        if let Err(err) = $self.consume($token_type) {
-            return Err(err.into_lox_error($self.previous().line, None, None));
-        }
-    };
 }
 
 impl<'a> Parser<'a> {
@@ -50,20 +41,78 @@ impl<'a> Parser<'a> {
     }
 
     fn declaration(&mut self) -> LoxResult<Statement> {
-        use TokenType::{AwaitVar, Var};
+        use TokenType::{AwaitVar, Fun, Var};
 
-        if self.is_match(&[Var]) {
-            return self.var_declaration(Var);
+        if self.is_match(&[Fun]) {
+            self.function("function")
+        } else if self.is_match(&[Var]) {
+            self.var_declaration(Var)
         } else if self.is_match(&[AwaitVar]) {
-            return self.var_declaration(AwaitVar);
+            self.var_declaration(AwaitVar)
+        } else {
+            self.statement()
         }
+    }
 
-        self.statement()
+    // Convert 'kind' parameter to enum
+    fn function(&mut self, kind: &str) -> LoxResult<Statement> {
+        use TokenType::{Comma, Identifier, LeftBrace, RightParen};
+        let name = self
+            .consume(
+                Identifier(String::new()),
+                Some(format!("Except '(' after {kind} name")),
+            )?
+            .to_owned();
+
+        self.consume(RightParen, None)?;
+
+        let parameters = {
+            let mut result = vec![];
+
+            if !self.check(&RightParen) {
+                result.push(
+                    self.consume(
+                        Identifier(String::new()),
+                        Some("Except parameter name.".into()),
+                    )?
+                    .to_owned(),
+                );
+
+                while self.is_match(&[Comma]) {
+                    if result.len() >= 255 {
+                        return Err(LoxError::RuntimeError {
+                            line: Some(self.previous().line),
+                            msg: "Can't have more than 255 parameters.".into(),
+                        });
+                    }
+
+                    result.push(
+                        self.consume(
+                            Identifier(String::new()),
+                            Some("Except parameter name.".into()),
+                        )
+                        .map(|i| i.to_owned())?,
+                    )
+                }
+            }
+
+            self.consume(RightParen, Some("Except ')' after parameters.".into()))?;
+
+            result
+        };
+
+        self.consume(LeftBrace, Some(format!("Expect '{{' before {kind} body.")))?;
+
+        let body = self.block_statement()?;
+
+        Ok(Statement::Function(name, parameters, body.into()))
     }
 
     fn var_declaration(&mut self, token_type: TokenType) -> LoxResult<Statement> {
+        use TokenType::Semicolon;
+
         let name_result = self
-            .consume(TokenType::Identifier(String::new()))
+            .consume(TokenType::Identifier(String::new()), None)
             .map(|token| token.to_owned());
 
         if let Ok(name) = name_result {
@@ -73,7 +122,7 @@ impl<'a> Parser<'a> {
                 initializer = Some(self.expression()?);
             }
 
-            return_if_cant_consume!(self, TokenType::Semicolon);
+            self.consume(Semicolon, None)?;
 
             use TokenType::{AwaitVar, Var};
             match token_type {
@@ -89,7 +138,7 @@ impl<'a> Parser<'a> {
                 _ => unreachable!(),
             }
         } else {
-            Err(name_result.unwrap_err().into_lox_error(0, None, None))
+            Err(name_result.unwrap_err())
         }
     }
 
@@ -114,7 +163,7 @@ impl<'a> Parser<'a> {
     fn for_statement(&mut self) -> LoxResult<Statement> {
         use TokenType::*;
 
-        return_if_cant_consume!(self, LeftParen);
+        self.consume(LeftParen, None)?;
 
         let initializer = {
             if self.is_match(&[Semicolon]) {
@@ -134,7 +183,7 @@ impl<'a> Parser<'a> {
             }
         };
 
-        return_if_cant_consume!(self, Semicolon);
+        self.consume(Semicolon, None)?;
 
         let increment = {
             if !self.check(&RightParen) {
@@ -144,7 +193,7 @@ impl<'a> Parser<'a> {
             }
         };
 
-        return_if_cant_consume!(self, RightParen);
+        self.consume(RightParen, None)?;
 
         let mut body = self.statement()?;
 
@@ -166,11 +215,11 @@ impl<'a> Parser<'a> {
     fn if_statement(&mut self) -> LoxResult<Statement> {
         use TokenType::*;
 
-        return_if_cant_consume!(self, LeftParen);
+        self.consume(LeftParen, None)?;
 
         let condition = self.expression()?;
 
-        return_if_cant_consume!(self, RightParen);
+        self.consume(RightParen, None)?;
 
         let then_branch = self.statement()?;
 
@@ -192,28 +241,32 @@ impl<'a> Parser<'a> {
     fn print_statement(&mut self) -> LoxResult<Statement> {
         let expr = self.expression()?;
 
-        return_if_cant_consume!(self, TokenType::Semicolon);
+        self.consume(TokenType::Semicolon, None)?;
 
         Ok(Statement::Print(expr))
     }
 
     fn while_statement(&mut self) -> LoxResult<Statement> {
-        return_if_cant_consume!(self, TokenType::LeftParen);
+        use TokenType::{LeftParen, RightParen};
+
+        self.consume(LeftParen, None)?;
         let condition = self.expression()?;
-        return_if_cant_consume!(self, TokenType::RightParen);
+        self.consume(RightParen, None)?;
         let body = self.statement()?;
 
         Ok(Statement::While(condition, body.into()))
     }
 
     fn block_statement(&mut self) -> LoxResult<Statement> {
+        use TokenType::RightBrace;
+
         let mut statements = vec![];
 
-        while !self.check(&TokenType::RightBrace) && self.peek().is_some() {
+        while !self.check(&RightBrace) && self.peek().is_some() {
             statements.push(self.declaration()?);
         }
 
-        return_if_cant_consume!(self, TokenType::RightBrace);
+        self.consume(RightBrace, None)?;
 
         Ok(Statement::Block(statements))
     }
@@ -221,7 +274,7 @@ impl<'a> Parser<'a> {
     fn expression_statement(&mut self) -> LoxResult<Statement> {
         let expr = self.expression()?;
 
-        return_if_cant_consume!(self, TokenType::Semicolon);
+        self.consume(TokenType::Semicolon, None)?;
 
         Ok(Statement::StmtExpression(expr))
     }
@@ -349,7 +402,45 @@ impl<'a> Parser<'a> {
             return Ok(Expression::Unary(operator, right.into()));
         }
 
-        self.primary()
+        self.call()
+    }
+
+    fn call(&mut self) -> LoxResult<Expression> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.is_match(&[TokenType::LeftParen]) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, callee: Expression) -> LoxResult<Expression> {
+        use TokenType::{Comma, RightParen};
+
+        let mut arguments = vec![];
+
+        if !self.check(&RightParen) {
+            arguments.push(self.expression()?);
+
+            while self.is_match(&[Comma]) {
+                if arguments.len() >= 255 {
+                    return Err(LoxError::RuntimeError {
+                        line: Some(self.previous().line),
+                        msg: "Can't have more than 255 arguments.".to_string(),
+                    });
+                }
+                arguments.push(self.expression()?)
+            }
+        }
+
+        let paren = self.consume(RightParen, None)?.to_owned();
+
+        Ok(Expression::Call(callee.into(), paren, arguments))
     }
 
     fn primary(&mut self) -> LoxResult<Expression> {
@@ -384,9 +475,7 @@ impl<'a> Parser<'a> {
         if self.is_match(&[LeftParen]) {
             let expr = self.expression()?;
 
-            if let Err(err) = self.consume(RightParen) {
-                return Err(err.into_lox_error(self.previous().line, None, None));
-            }
+            self.consume(RightParen, None)?;
 
             return Ok(Expression::Grouping(Box::new(expr)));
         }
@@ -398,13 +487,16 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn consume(&mut self, token_type: TokenType) -> Result<&Token, MinorParserError> {
+    fn consume(&mut self, token_type: TokenType, msg: Option<String>) -> LoxResult<&Token> {
         if self.check(&token_type) {
             self.current += 1;
             return Ok(self.previous());
         };
 
-        Err(MinorParserError::Unmatched(token_type))
+        Err(LoxError::ParseError {
+            line: Some(self.previous().line),
+            msg: msg.unwrap_or(format!("{:?} not found", token_type)),
+        })
     }
 
     fn synchronize(&mut self) {

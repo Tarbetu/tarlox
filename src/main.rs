@@ -10,11 +10,26 @@ use executor::Executor;
 use scanner::Scanner;
 use std::env;
 use std::process;
+use std::{num::NonZeroUsize, thread::available_parallelism};
 use syntax::Parser;
+
+use lazy_static::lazy_static;
+use rayon::ThreadPoolBuilder;
 use tokio::fs;
 
 // pub const NUMBER_PREC: u32 = rug::float::prec_max();
 pub const NUMBER_PREC: u32 = 2046;
+
+lazy_static! {
+    static ref WORKERS: rayon::ThreadPool = ThreadPoolBuilder::new()
+        .num_threads(
+            available_parallelism()
+                .unwrap_or(NonZeroUsize::new(1).unwrap())
+                .into(),
+        )
+        .build()
+        .unwrap();
+}
 
 #[tokio::main]
 async fn main() {
@@ -29,8 +44,8 @@ async fn main() {
         Equal => {
             let path = &args.next().unwrap();
             if let Ok(source_code) = fs::read_to_string(path).await {
-                let mut exe = Executor::new();
-                if let Err(e) = run(&source_code, &mut exe).await {
+                let mut exe = Executor::new(&WORKERS);
+                if let Err(e) = run(&source_code, &mut exe) {
                     println!("{e}");
                     process::exit(65)
                 }
@@ -46,9 +61,9 @@ async fn main() {
 }
 
 async fn run_prompt() {
-    let mut rl = rustyline::DefaultEditor::new().unwrap();
+    let mut exe = Executor::new(&WORKERS);
 
-    let mut exe = Executor::new();
+    let mut rl = rustyline::DefaultEditor::new().unwrap();
     loop {
         let readline = rl.readline("Tarbetu's Lox>> ");
 
@@ -58,7 +73,7 @@ async fn run_prompt() {
                     break;
                 };
 
-                if let Err(e) = run(&input, &mut exe).await {
+                if let Err(e) = run(&input, &mut exe) {
                     println!("{e}\n");
                 };
             }
@@ -67,13 +82,13 @@ async fn run_prompt() {
     }
 }
 
-async fn run(code: &str, exe: &mut Executor) -> LoxResult<()> {
+fn run(code: &str, exe: &mut Executor) -> LoxResult<()> {
     let expr = {
         let tokens = Scanner::new(code).scan_tokens()?;
         Parser::new(&tokens).parse()?
     };
 
-    exe.execute(&expr).await?;
+    exe.execute(&expr)?;
 
     Ok(())
 }

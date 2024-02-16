@@ -8,6 +8,7 @@ ahash = { version = "0.8.8", features = ["compile-time-rng", "std"] }
 async-recursion = "1.0.5"
 dashmap = { version = "5.5.3", features = ["rayon"] }
 either = "1.9.0"
+lazy_static = "1.4.0"
 rayon = "1.8.1"
 rug = "1.24.0"
 rustyline = "13.0.0"

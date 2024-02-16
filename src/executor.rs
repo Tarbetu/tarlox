@@ -1,9 +1,9 @@
 mod environment;
+mod function;
 mod object;
 
-use async_recursion::async_recursion;
 use either::Either;
-use rayon::{ThreadPool, ThreadPoolBuilder};
+use rayon::ThreadPool;
 
 use crate::executor::environment::PackagedObject;
 use crate::syntax::expression::LoxLiteral;
@@ -18,39 +18,29 @@ pub use environment::Environment;
 use object::LoxObject;
 
 use std::sync::Arc;
-use std::{num::NonZeroUsize, thread::available_parallelism};
 
 pub struct Executor {
     environment: Arc<Environment>,
-    workers: ThreadPool,
+    workers: &'static ThreadPool,
 }
 
 impl Executor {
-    pub fn new() -> Executor {
+    pub fn new(workers: &'static ThreadPool) -> Executor {
         Self {
             environment: Arc::new(Environment::new()),
-            workers: ThreadPoolBuilder::new()
-                .num_threads(
-                    available_parallelism()
-                        .unwrap_or(NonZeroUsize::new(1).unwrap())
-                        .into(),
-                )
-                .build()
-                .unwrap(),
+            workers,
         }
     }
 
-    #[async_recursion]
-    pub async fn execute(&mut self, statements: &[Statement]) -> LoxResult<()> {
+    pub fn execute(&mut self, statements: &[Statement]) -> LoxResult<()> {
         for statement in statements {
-            self.eval_statement(statement).await?;
+            self.eval_statement(statement)?;
         }
 
         Ok(())
     }
 
-    #[async_recursion]
-    async fn eval_statement(&mut self, stmt: &Statement) -> LoxResult<()> {
+    fn eval_statement(&mut self, stmt: &Statement) -> LoxResult<()> {
         use Statement::*;
 
         match stmt {
@@ -69,7 +59,7 @@ impl Executor {
                 if let Some(expr) = initializer {
                     environment::put(
                         Arc::clone(&self.environment),
-                        &self.workers,
+                        self.workers,
                         match &token.kind {
                             TokenType::Identifier(name) => name,
                             _ => unreachable!(),
@@ -107,7 +97,7 @@ impl Executor {
                 let previous = Arc::clone(&self.environment);
                 self.environment = Arc::new(Environment::new_with_parent(Arc::clone(&previous)));
 
-                let res = self.execute(statements).await;
+                let res = self.execute(statements);
 
                 self.environment = previous;
 
@@ -117,20 +107,22 @@ impl Executor {
                 let condition = bool::from(&eval_expression(self.environment.clone(), condition)?);
 
                 if condition {
-                    self.eval_statement(then_branch).await?;
+                    self.eval_statement(then_branch)?;
                 } else if else_branch.is_some() {
-                    self.eval_statement(else_branch.as_ref().unwrap()).await?;
+                    self.eval_statement(else_branch.as_ref().unwrap())?;
                 }
 
                 Ok(())
             }
             While(condition, body) => {
                 while bool::from(&eval_expression(Arc::clone(&self.environment), condition)?) {
-                    self.eval_statement(body).await?;
+                    self.eval_statement(body)?;
                 }
 
                 return Ok(());
             }
+            FunctionDeclaration(function) => unimplemented!(),
+            Function(name, params, body) => unimplemented!(),
         }
     }
 }
@@ -273,6 +265,54 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
             }
 
             eval_expression(environment, right)
+        }
+        Call(callee, paren, arguments) => {
+            let callee_id = eval_expression(Arc::clone(&environment), callee)?;
+
+            if let LoxObject::FunctionId(hash) = callee_id {
+                let arguments = {
+                    let mut res = vec![];
+
+                    for arg in arguments {
+                        res.push(eval_expression(Arc::clone(&environment), arg)?)
+                    }
+
+                    res
+                };
+
+                loop {
+                    match environment.get(&hash) {
+                        // DRY! This is repeated in Variable section
+                        // All waiting for packaged object things should be moved into a macro or function
+                        Some(packaged_object) => match packaged_object.value() {
+                            PackagedObject::Pending(mtx, cvar) => {
+                                let res = mtx.lock().unwrap();
+
+                                let _ = cvar.wait_while(res, |pending| !*pending);
+                            }
+                            PackagedObject::Ready(function_hash) => match function_hash {
+                                Ok(LoxObject::FunctionId(fun_hash)) => {
+                                    if let Some(fun) = environment.get(fun_hash) {
+                                        unimplemented!()
+                                    } else {
+                                        unimplemented!()
+                                    }
+                                }
+                                Ok(_) => unimplemented!(),
+                                Err(_) => unimplemented!(),
+                            },
+                        },
+                        None => {
+                            return Err(LoxError::RuntimeError {
+                                line: Some(paren.line),
+                                msg: "Undefined callable".into(),
+                            })
+                        }
+                    }
+                }
+            } else {
+                Err(LoxError::InternalError("Can't find function hash!".into()))
+            }
         }
     }
 }

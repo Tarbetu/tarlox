@@ -6,17 +6,16 @@ use std::sync::Mutex;
 use std::sync::{Arc, Condvar};
 
 use super::eval_expression;
+use super::function::LoxCallable;
 use super::object::LoxObject;
 use crate::syntax::Expression;
 use crate::LoxResult;
 
-#[derive(Debug)]
 pub enum PackagedObject {
     Pending(Mutex<bool>, Condvar),
-    Ready(LoxResult<LoxObject>),
+    Ready(LoxResult<Either<LoxObject, LoxCallable>>),
 }
 
-#[derive(Debug)]
 pub struct Environment {
     pub enclosing: Option<Arc<Environment>>,
     pub values: DashMap<u64, PackagedObject, ahash::RandomState>,
@@ -88,7 +87,8 @@ pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr
     let sub_environment = create_sub_environment!(existing_key, environment);
 
     workers.install(move || {
-        let value = eval_expression(Arc::clone(&sub_environment), expr);
+        let value =
+            eval_expression(Arc::clone(&sub_environment), expr).map(|obj| Either::Left(obj));
 
         if let PackagedObject::Pending(mtx, cdv) = sub_environment.get(&key).unwrap().value() {
             *mtx.lock().unwrap() = true;
@@ -113,8 +113,8 @@ pub fn put_immediately(
     Arc::clone(&environment).values.insert(
         variable_hash(name),
         PackagedObject::Ready(match expr_or_obj {
-            Left(expr) => eval_expression(sub_environment, expr),
-            Right(obj) => Ok(obj),
+            Left(expr) => eval_expression(sub_environment, expr).map(|obj| Either::Left(obj)),
+            Right(obj) => Ok(Either::Left(obj)),
         }),
     );
 }

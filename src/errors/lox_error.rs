@@ -1,5 +1,4 @@
 use core::fmt;
-use std::sync::mpsc::RecvError;
 use std::{
     fmt::Display,
     io::{self},
@@ -71,11 +70,5 @@ impl From<io::Error> for LoxError {
             NotFound | PermissionDenied => Self::FileError,
             other => Self::Other(other.to_string()),
         }
-    }
-}
-
-impl From<RecvError> for LoxError {
-    fn from(_: RecvError) -> Self {
-        Self::InternalError("Error while connecting channel!".into())
     }
 }

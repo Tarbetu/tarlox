@@ -13,6 +13,7 @@ pub enum Expression {
     Logical(Box<Expression>, Operator, Box<Expression>),
     Variable(Token),
     Assign(Token, Box<Expression>),
+    Call(Box<Expression>, Token, Vec<Expression>),
 }
 
 impl Display for Expression {
@@ -40,6 +41,9 @@ impl Display for Expression {
             }
             Logical(left, operator, right) => {
                 write!(f, "({operator} {left} {right})")
+            }
+            Call(callee, _paren, arguments) => {
+                write!(f, "({callee} #{arguments:?})")
             }
         }
     }

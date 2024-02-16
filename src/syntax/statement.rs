@@ -13,4 +13,8 @@ pub enum Statement {
     If(Expression, Box<Statement>, Option<Box<Statement>>),
     //     Condition     Body
     While(Expression, Box<Statement>),
+    //                     Function
+    FunctionDeclaration(Box<Statement>),
+    //        Name     Params      Body
+    Function(Token, Vec<Token>, Box<Statement>),
 }

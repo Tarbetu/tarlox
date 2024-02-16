@@ -1,11 +1,14 @@
 use crate::{LoxError, LoxResult, NUMBER_PREC};
 
+use either::Either;
 use rug::Float;
 use std::sync::Arc;
 
 // use std::any::Any;
 
 use std::ops;
+
+use super::function::LoxFunction;
 
 #[derive(Debug, PartialEq)]
 pub enum LoxObject {
@@ -14,6 +17,7 @@ pub enum LoxObject {
     Number(Arc<Float>),
     LoxString(Arc<String>),
     Boolean(bool),
+    FunctionId(u64),
 }
 
 impl LoxObject {
@@ -201,6 +205,7 @@ impl ToString for LoxObject {
                 }
             }
             Boolean(b) => b.to_string(),
+            FunctionId(callable_hash) => format!("<fonk {callable_hash}>"),
         }
     }
 }
@@ -214,6 +219,7 @@ impl From<&LoxObject> for LoxObject {
             Number(num) => Number(Arc::clone(num)),
             Boolean(bool) => Boolean(*bool),
             Nil => Nil,
+            FunctionId(callable_hash) => FunctionId(*callable_hash),
         }
     }
 }
