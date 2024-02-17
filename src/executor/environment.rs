@@ -118,9 +118,7 @@ pub fn put_immediately(
     );
 }
 
-pub fn put_function(environment: Arc<Environment>, name: &str, fun: LoxCallable) {
-    let key = function_hash(name);
-
+pub fn put_function(environment: Arc<Environment>, key: u64, fun: LoxCallable) {
     // Analyze function if not native
     // So check if it's recursive
     // let is_recursive = false;
@@ -138,8 +136,7 @@ pub fn variable_hash(name: &str) -> u64 {
 
 pub fn function_hash(name: &str) -> u64 {
     let mut hasher = ahash::AHasher::default();
-    hasher.write("!LOX@".as_bytes());
+    hasher.write("@".as_bytes());
     hasher.write(name.as_bytes());
-    hasher.write("#FUNCTION!".as_bytes());
     hasher.finish()
 }

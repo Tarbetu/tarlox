@@ -6,6 +6,7 @@ use either::Either;
 use rayon::ThreadPool;
 
 use crate::executor::environment::PackagedObject;
+use crate::executor::function::LoxCallable;
 use crate::syntax::expression::LoxLiteral;
 use crate::syntax::expression::Operator;
 use crate::syntax::Expression;
@@ -118,10 +119,26 @@ impl Executor {
                     self.eval_statement(body)?;
                 }
 
-                return Ok(());
+                Ok(())
             }
-            FunctionDeclaration(function) => unimplemented!(),
-            Function(name, params, body) => unimplemented!(),
+            Function(name, params, body) => {
+                if let TokenType::Identifier(name) = &name.kind {
+                    let fun = LoxCallable::new(*params, *body, *self);
+                    let fun_hash = environment::function_hash(name);
+                    environment::put_function(Arc::clone(&self.environment), fun_hash, fun);
+                    environment::put_immediately(
+                        self.environment,
+                        name,
+                        Either::Right(LoxObject::FunctionId(fun_hash)),
+                    );
+                    Ok(())
+                } else {
+                    Err(LoxError::ParseError {
+                        line: Some(name.line),
+                        msg: String::from("Invalid name specified in function statement!"),
+                    })
+                }
+            }
         }
     }
 }
@@ -199,15 +216,15 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                             }
                             PackagedObject::Ready(val) => match val {
                                 Ok(obj) => {
-                                    return Ok(LoxObject::from(match obj {
+                                    return Ok(match obj {
                                         Either::Left(obj) => LoxObject::from(obj),
-                                        Either::Right(fun) => {
+                                        Either::Right(_) => {
                                             return Err(LoxError::RuntimeError {
                                                 line: Some(token.line),
                                                 msg: format!("{name} is a function."),
                                             })
                                         }
-                                    }))
+                                    });
                                 }
                                 // Make this better in future
                                 Err(e) => return Err(e.clone()),
@@ -293,31 +310,50 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                     match environment.get(&hash) {
                         // DRY! This is repeated in Variable section
                         // All waiting for packaged object things should be moved into a macro or function
-                        Some(packaged_object) => match packaged_object.value() {
-                            PackagedObject::Pending(mtx, cvar) => {
-                                let res = mtx.lock().unwrap();
+                        Some(packaged_object) => {
+                            match packaged_object.value() {
+                                PackagedObject::Pending(mtx, cvar) => {
+                                    let res = mtx.lock().unwrap();
 
-                                let _ = cvar.wait_while(res, |pending| !*pending);
-                            }
-                            PackagedObject::Ready(function_hash) => match function_hash {
-                                Ok(Either::Left(LoxObject::FunctionId(fun_hash))) => {
-                                    if let Some(fun_ref) = environment.values.get(fun_hash) {
-                                        if let PackagedObject::Ready(fun) = fun_ref.value() {
-                                            let fun =
-                                                fun.as_ref().unwrap().as_ref().right().unwrap();
-
-                                            fun.call(&arguments)?;
-                                        } else {
-                                            unimplemented!()
-                                        }
-                                    } else {
-                                        unimplemented!()
-                                    }
+                                    let _ = cvar.wait_while(res, |pending| !*pending);
                                 }
-                                Ok(_) => unimplemented!(),
-                                Err(_) => unimplemented!(),
-                            },
-                        },
+                                PackagedObject::Ready(function_hash) => match function_hash {
+                                    Ok(Either::Left(LoxObject::FunctionId(fun_hash))) => {
+                                        if let Some(fun_ref) = environment.values.get(fun_hash) {
+                                            if let PackagedObject::Ready(fun) = fun_ref.value() {
+                                                let fun =
+                                                    fun.as_ref().unwrap().as_ref().right().unwrap();
+
+                                                return fun.call(&arguments);
+                                            } else {
+                                                return Err(LoxError::InternalError(String::from("Function is never packed in PackagedObject::Pending!")));
+                                            }
+                                        } else {
+                                            return Err(LoxError::InternalError(String::from(
+                                                "FunctionId does not point a function!",
+                                            )));
+                                        }
+                                    }
+                                    Ok(Either::Left(obj)) => {
+                                        return Err(LoxError::RuntimeError {
+                                        msg: format!("Callee does not reference to an function! It references to an {}", obj.to_string()),
+                                        line: Some(paren.line)
+                                    });
+                                    }
+                                    Ok(Either::Right(_)) => {
+                                        return Err(LoxError::RuntimeError {
+                                        msg: String::from("Callee directly points to an function! How can it be?"),
+                                        line: Some(paren.line)
+                                    });
+                                    }
+                                    Err(_) => {
+                                        return Err(LoxError::InternalError(String::from(
+                                            "Invalid state for callee!",
+                                        )))
+                                    }
+                                },
+                            }
+                        }
                         None => {
                             return Err(LoxError::RuntimeError {
                                 line: Some(paren.line),

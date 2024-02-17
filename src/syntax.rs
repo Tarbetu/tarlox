@@ -56,15 +56,16 @@ impl<'a> Parser<'a> {
 
     // Convert 'kind' parameter to enum
     fn function(&mut self, kind: &str) -> LoxResult<Statement> {
-        use TokenType::{Comma, Identifier, LeftBrace, RightParen};
+        use TokenType::{Comma, Identifier, LeftBrace, LeftParen, RightParen};
+
         let name = self
             .consume(
                 Identifier(String::new()),
-                Some(format!("Except '(' after {kind} name")),
+                Some(format!("Except {kind} name")),
             )?
             .to_owned();
 
-        self.consume(RightParen, None)?;
+        self.consume(LeftParen, Some(format!("Except '(' after {kind} name")))?;
 
         let parameters = {
             let mut result = vec![];
@@ -618,5 +619,43 @@ mod tests {
     #[test]
     fn test_block_statement() {
         assert_eq!(create_statement("{}").unwrap(), Statement::Block(vec![]))
+    }
+
+    #[test]
+    fn test_call() {
+        use TokenType::{Identifier, RightParen};
+
+        assert_eq!(
+            create_expression("try_call()").unwrap(),
+            Expression::Call(
+                Expression::Variable(Token {
+                    line: 1,
+                    kind: Identifier("try_call".into())
+                })
+                .into(),
+                Token {
+                    line: 1,
+                    kind: RightParen
+                },
+                vec![]
+            )
+        )
+    }
+
+    #[test]
+    fn test_function_declaration() {
+        use TokenType::Identifier;
+
+        assert_eq!(
+            create_statement("fun this_is_function() {}").unwrap(),
+            Statement::Function(
+                Token {
+                    line: 1,
+                    kind: Identifier("this_is_function".to_string())
+                },
+                vec![],
+                Statement::Block(vec![]).into()
+            )
+        )
     }
 }
