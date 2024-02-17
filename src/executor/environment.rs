@@ -87,8 +87,7 @@ pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr
     let sub_environment = create_sub_environment!(existing_key, environment);
 
     workers.install(move || {
-        let value =
-            eval_expression(Arc::clone(&sub_environment), expr).map(|obj| Either::Left(obj));
+        let value = eval_expression(Arc::clone(&sub_environment), expr).map(Either::Left);
 
         if let PackagedObject::Pending(mtx, cdv) = sub_environment.get(&key).unwrap().value() {
             *mtx.lock().unwrap() = true;
@@ -113,14 +112,34 @@ pub fn put_immediately(
     Arc::clone(&environment).values.insert(
         variable_hash(name),
         PackagedObject::Ready(match expr_or_obj {
-            Left(expr) => eval_expression(sub_environment, expr).map(|obj| Either::Left(obj)),
+            Left(expr) => eval_expression(sub_environment, expr).map(Either::Left),
             Right(obj) => Ok(Either::Left(obj)),
         }),
     );
 }
 
+pub fn put_function(environment: Arc<Environment>, name: &str, fun: LoxCallable) {
+    let key = function_hash(name);
+
+    // Analyze function if not native
+    // So check if it's recursive
+    // let is_recursive = false;
+
+    environment
+        .values
+        .insert(key, PackagedObject::Ready(Ok(Either::Right(fun))));
+}
+
 pub fn variable_hash(name: &str) -> u64 {
     let mut hasher = ahash::AHasher::default();
     hasher.write(name.as_bytes());
+    hasher.finish()
+}
+
+pub fn function_hash(name: &str) -> u64 {
+    let mut hasher = ahash::AHasher::default();
+    hasher.write("!LOX@".as_bytes());
+    hasher.write(name.as_bytes());
+    hasher.write("#FUNCTION!".as_bytes());
     hasher.finish()
 }

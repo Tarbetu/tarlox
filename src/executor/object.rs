@@ -1,14 +1,11 @@
 use crate::{LoxError, LoxResult, NUMBER_PREC};
 
-use either::Either;
 use rug::Float;
 use std::sync::Arc;
 
 // use std::any::Any;
 
 use std::ops;
-
-use super::function::LoxFunction;
 
 #[derive(Debug, PartialEq)]
 pub enum LoxObject {

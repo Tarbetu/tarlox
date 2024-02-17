@@ -32,7 +32,7 @@ impl Executor {
         }
     }
 
-    pub fn execute(&mut self, statements: &[Statement]) -> LoxResult<()> {
+    pub fn execute(&self, statements: &[Statement]) -> LoxResult<()> {
         for statement in statements {
             self.eval_statement(statement)?;
         }
@@ -40,7 +40,7 @@ impl Executor {
         Ok(())
     }
 
-    fn eval_statement(&mut self, stmt: &Statement) -> LoxResult<()> {
+    fn eval_statement(&self, stmt: &Statement) -> LoxResult<()> {
         use Statement::*;
 
         match stmt {
@@ -95,13 +95,12 @@ impl Executor {
             }
             Block(statements) => {
                 let previous = Arc::clone(&self.environment);
-                self.environment = Arc::new(Environment::new_with_parent(Arc::clone(&previous)));
+                let sub_executor = Executor {
+                    workers: self.workers,
+                    environment: Arc::new(Environment::new_with_parent(Arc::clone(&previous))),
+                };
 
-                let res = self.execute(statements);
-
-                self.environment = previous;
-
-                res
+                sub_executor.execute(statements)
             }
             If(condition, then_branch, else_branch) => {
                 let condition = bool::from(&eval_expression(self.environment.clone(), condition)?);
@@ -199,7 +198,17 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                                 let _ = cvar.wait_while(res, |pending| !*pending);
                             }
                             PackagedObject::Ready(val) => match val {
-                                Ok(obj) => return Ok(LoxObject::from(obj)),
+                                Ok(obj) => {
+                                    return Ok(LoxObject::from(match obj {
+                                        Either::Left(obj) => LoxObject::from(obj),
+                                        Either::Right(fun) => {
+                                            return Err(LoxError::RuntimeError {
+                                                line: Some(token.line),
+                                                msg: format!("{name} is a function."),
+                                            })
+                                        }
+                                    }))
+                                }
                                 // Make this better in future
                                 Err(e) => return Err(e.clone()),
                             },
@@ -291,9 +300,16 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                                 let _ = cvar.wait_while(res, |pending| !*pending);
                             }
                             PackagedObject::Ready(function_hash) => match function_hash {
-                                Ok(LoxObject::FunctionId(fun_hash)) => {
-                                    if let Some(fun) = environment.get(fun_hash) {
-                                        unimplemented!()
+                                Ok(Either::Left(LoxObject::FunctionId(fun_hash))) => {
+                                    if let Some(fun_ref) = environment.values.get(fun_hash) {
+                                        if let PackagedObject::Ready(fun) = fun_ref.value() {
+                                            let fun =
+                                                fun.as_ref().unwrap().as_ref().right().unwrap();
+
+                                            fun.call(&arguments)?;
+                                        } else {
+                                            unimplemented!()
+                                        }
                                     } else {
                                         unimplemented!()
                                     }

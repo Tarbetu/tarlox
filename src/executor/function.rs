@@ -2,8 +2,6 @@ use crate::{syntax::Statement, LoxError, LoxResult, Token};
 
 use super::{object::LoxObject, Executor};
 
-type LoxClosure = Box<dyn FnOnce(&[LoxObject]) -> LoxResult<()> + Send + Sync>;
-
 pub enum LoxCallable {
     Function {
         parameters: Vec<Token>,
@@ -13,7 +11,7 @@ pub enum LoxCallable {
     },
     NativeFunction {
         arity: usize,
-        fun: LoxClosure,
+        fun: fn(&[LoxObject]) -> LoxResult<()>,
     },
 }
 
@@ -27,7 +25,9 @@ impl LoxCallable {
         }
     }
 
-    fn call(&mut self, arguments: &[LoxObject]) -> LoxResult<()> {
+    pub fn call(&self, arguments: &[LoxObject]) -> LoxResult<()> {
+        use LoxCallable::*;
+
         if arguments.len() > self.arity() {
             return Err(LoxError::RuntimeError {
                 line: None,
@@ -35,7 +35,6 @@ impl LoxCallable {
             });
         }
 
-        use LoxCallable::*;
         match self {
             Function {
                 parameters,
