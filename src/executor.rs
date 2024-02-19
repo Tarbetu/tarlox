@@ -123,15 +123,16 @@ impl Executor {
             }
             Function(name, params, body) => {
                 if let TokenType::Identifier(name) = &name.kind {
-                    let fun = LoxCallable::new(*params, *body, *self);
-                    let fun_hash = environment::function_hash(name);
-                    environment::put_function(Arc::clone(&self.environment), fun_hash, fun);
-                    environment::put_immediately(
-                        self.environment,
-                        name,
-                        Either::Right(LoxObject::FunctionId(fun_hash)),
-                    );
-                    Ok(())
+                    // let fun = LoxCallable::new(*params, *body, *self);
+                    // let fun_hash = environment::function_hash(name);
+                    // environment::put_function(Arc::clone(&self.environment), fun_hash, fun);
+                    // environment::put_immediately(
+                    //     self.environment,
+                    //     name,
+                    //     Either::Right(LoxObject::FunctionId(fun_hash)),
+                    // );
+                    // Ok(())
+                    unimplemented!()
                 } else {
                     Err(LoxError::ParseError {
                         line: Some(name.line),
