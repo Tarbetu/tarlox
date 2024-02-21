@@ -1,6 +1,6 @@
 # Tarbetu's Lox
 
-Lox, [Crafting Interpreters](https://craftinginterpreters.com/) isimli kitapta oluşuturulan dinamik tipli ve yorumlanan bir dildir. Bu dil öğretim amacıyla sade tutulmuştur ve hemen hemen her "imperative" (ya da Sadi Evren Şeker'in çeviriyle "emirli") dilde var olan özellikler bulunmaktadır. Örneğin:
+Lox, [Crafting Interpreters](https://craftinginterpreters.com/) isimli kitapta oluşuturulan dinamik tipli ve yorumlanan bir dildir. Bu dil öğretim amacıyla sade tutulmuştur ve hemen hemen her "imperative" (ya da Sadi Evren Şeker'in çevirisiyle "emirli") dilde var olan özellikler bulunmaktadır. Örneğin:
 
 - Değişken atama
 - If/Else
@@ -100,7 +100,7 @@ fun fib(n) {
 
 İlgili örnekte `fib(n - 1)` ve `fib(n - 2)` çağrıları farklı bir threadde hesaplanacaktır. Tarlox'ta özyineleme güvenlidir, stack overflow'a sebep olmaz. Her çağrıda argüman dışında bütün değerler atılır, çağrı içerisinde kaç farklı dal (branch) varsa o kadar argüman tutulur. Aslında fonksiyon çağrısından ziyade fonksiyon sanki bir "goto" ifadesi varmışcasına tekrar tekrar baştan çalıştırılır.
 
-Kişisel önerim hem bilgisayar bilimlerine yatkınlığından ötürü hem de yan etkiler kontrol edilebileği için özyinelemeyi tercih etmenizdir.
+Kişisel önerim hem bilgisayar bilimlerine yatkınlığından ötürü hem de yan etkiler kontrol edilebileceği için özyinelemeyi tercih etmenizdir.
 
 Proje hakkındaki örnek kodları `examples` dizini altında bulabilirsiniz. Ne yazık ki yorum satırları İngilizce.
 
