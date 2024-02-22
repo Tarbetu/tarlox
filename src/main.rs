@@ -1,6 +1,7 @@
 mod errors;
 mod executor;
 mod scanner;
+mod standard;
 mod syntax;
 
 pub use crate::errors::LoxError;

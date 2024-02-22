@@ -408,6 +408,7 @@ impl<'a> Parser<'a> {
 
     fn call(&mut self) -> LoxResult<Expression> {
         let mut expr = self.primary()?;
+        dbg!(&expr);
 
         loop {
             if self.is_match(&[TokenType::LeftParen]) {
