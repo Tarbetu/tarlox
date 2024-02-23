@@ -1,11 +1,13 @@
-mod callable;
+pub mod callable;
 pub mod environment;
-mod object;
+pub mod object;
 
 use either::Either;
 use rayon::ThreadPool;
 
-use crate::executor::callable::LoxCallable;
+pub use crate::executor::callable::LoxCallable;
+pub use object::LoxObject;
+
 use crate::executor::environment::PackagedObject;
 use crate::syntax::expression::LoxLiteral;
 use crate::syntax::expression::Operator;
@@ -16,7 +18,6 @@ use crate::LoxResult;
 use crate::TokenType;
 use crate::TokenType::*;
 pub use environment::Environment;
-use object::LoxObject;
 
 use std::sync::Arc;
 
@@ -29,6 +30,13 @@ impl Executor {
     pub fn new(workers: &'static ThreadPool) -> Executor {
         Self {
             environment: Arc::new(Environment::new()),
+            workers,
+        }
+    }
+
+    pub fn new_with_env(workers: &'static ThreadPool, environment: Arc<Environment>) -> Executor {
+        Self {
+            environment,
             workers,
         }
     }

@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 ahash = { version = "0.8.8", features = ["compile-time-rng", "std"] }
 async-recursion = "1.0.5"
+chrono = "0.4.34"
 dashmap = { version = "5.5.3", features = ["rayon"] }
 either = "1.9.0"
 lazy_static = "1.4.0"

@@ -45,7 +45,7 @@ async fn main() {
         Equal => {
             let path = &args.next().unwrap();
             if let Ok(source_code) = fs::read_to_string(path).await {
-                let mut exe = Executor::new(&WORKERS);
+                let mut exe = Executor::new_with_env(&WORKERS, standard::globals());
                 if let Err(e) = run(&source_code, &mut exe) {
                     println!("{e}");
                     process::exit(65)
@@ -62,7 +62,7 @@ async fn main() {
 }
 
 async fn run_prompt() {
-    let mut exe = Executor::new(&WORKERS);
+    let mut exe = Executor::new_with_env(&WORKERS, standard::globals());
 
     let mut rl = rustyline::DefaultEditor::new().unwrap();
     loop {

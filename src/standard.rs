@@ -1,14 +1,20 @@
+mod clock;
+
 use crate::executor::environment;
 use crate::executor::Environment;
+use crate::executor::LoxCallable;
 use std::sync::Arc;
 
-fn globals() -> Arc<Environment> {
+pub fn globals() -> Arc<Environment> {
     let env = Arc::new(Environment::new());
 
     environment::put_function(
-        env,
-        environment::variable_hash(unimplemented!()),
-        unimplemented!(),
+        Arc::clone(&env),
+        environment::variable_hash("clock"),
+        LoxCallable::NativeFunction {
+            arity: 0,
+            fun: clock::clock,
+        },
     );
 
     env
