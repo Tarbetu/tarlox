@@ -5,17 +5,23 @@ use crate::executor::Environment;
 use crate::executor::LoxCallable;
 use std::sync::Arc;
 
+macro_rules! make_function {
+    ($env:expr, $arity:expr, $name:ident) => {
+        environment::put_function(
+            Arc::clone(&$env),
+            environment::variable_hash(stringify!($name)),
+            LoxCallable::NativeFunction {
+                arity: $arity,
+                fun: $name::$name,
+            },
+        )
+    };
+}
+
 pub fn globals() -> Arc<Environment> {
     let env = Arc::new(Environment::new());
 
-    environment::put_function(
-        Arc::clone(&env),
-        environment::variable_hash("clock"),
-        LoxCallable::NativeFunction {
-            arity: 0,
-            fun: clock::clock,
-        },
-    );
+    make_function!(env, 0, clock);
 
     env
 }
