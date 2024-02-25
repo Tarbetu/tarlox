@@ -1,7 +1,7 @@
 use either::Either;
 
 use crate::{
-    executor::environment::{self},
+    executor::environment::{self, env_hash},
     syntax::Statement,
     LoxError, LoxResult, Token,
     TokenType::Identifier,
@@ -59,8 +59,22 @@ impl LoxCallable {
                     }
                 }
 
-                executor.eval_statement(Arc::clone(body))?;
-                Ok(LoxObject::from(()))
+                match executor.eval_statement(Arc::clone(body)) {
+                    Ok(()) => Ok(LoxObject::Nil),
+                    Err(LoxError::Return) => {
+                        match executor
+                            .environment
+                            .remove(&env_hash("@Return Value"))
+                            .unwrap()
+                            .1
+                            .wait_for_value()
+                        {
+                            Ok(val) => Ok(val.into()),
+                            Err(e) => Err(e.to_owned()),
+                        }
+                    }
+                    error => error.map(|_| LoxObject::Nil),
+                }
             }
             NativeFunction { fun, .. } => fun(arguments),
         }

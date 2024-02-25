@@ -18,6 +18,21 @@ pub enum PackagedObject {
     Ready(LoxResult<LoxObject>),
 }
 
+impl PackagedObject {
+    pub fn wait_for_value(&self) -> &LoxResult<LoxObject> {
+        loop {
+            match self {
+                Self::Pending(mtx, cvar) => {
+                    let res = mtx.lock().unwrap();
+
+                    let _ = cvar.wait_while(res, |pending| !*pending);
+                }
+                Self::Ready(val) => return val,
+            }
+        }
+    }
+}
+
 pub struct Environment {
     pub enclosing: Option<Arc<Environment>>,
     pub values: DashMap<u64, PackagedObject, ahash::RandomState>,

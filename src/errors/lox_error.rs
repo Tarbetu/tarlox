@@ -19,6 +19,7 @@ pub enum LoxError {
     ExceptedExpression(usize),
     TypeError { excepted_type: String },
     Other(String),
+    Return,
 }
 
 impl Display for LoxError {
@@ -58,6 +59,7 @@ impl Display for LoxError {
             }
             InternalError(msg) => write!(f, "[Internal Error: {msg}]"),
             Other(txt) => write!(f, "[Unexcepted Error from io::Error - {txt}]"),
+            Return => write!(f, "Unhandled return statement."),
         }
     }
 }

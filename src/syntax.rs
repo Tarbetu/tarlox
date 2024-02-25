@@ -1,5 +1,4 @@
 pub mod expression;
-pub mod minor_parse_error;
 pub mod statement;
 
 use crate::LoxError;
@@ -154,6 +153,8 @@ impl<'a> Parser<'a> {
             self.if_statement()
         } else if self.is_match(&[Print]) {
             self.print_statement()
+        } else if self.is_match(&[Return]) {
+            self.return_statement()
         } else if self.is_match(&[While]) {
             self.while_statement()
         } else if self.is_match(&[LeftBrace]) {
@@ -250,6 +251,22 @@ impl<'a> Parser<'a> {
         self.consume(TokenType::Semicolon, None)?;
 
         Ok(Statement::Print(expr))
+    }
+
+    fn return_statement(&mut self) -> LoxResult<Statement> {
+        use TokenType::Semicolon;
+
+        let value = {
+            if !self.check(&Semicolon) {
+                Some(self.expression()?)
+            } else {
+                None
+            }
+        };
+
+        self.consume(Semicolon, Some("Need ';' after return value".into()))?;
+
+        Ok(Statement::Return(value))
     }
 
     fn while_statement(&mut self) -> LoxResult<Statement> {

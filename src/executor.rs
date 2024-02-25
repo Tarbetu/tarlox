@@ -6,7 +6,6 @@ use either::Either;
 use rayon::ThreadPool;
 
 pub use crate::executor::callable::LoxCallable;
-use crate::executor::environment::env_hash;
 use crate::WORKERS;
 pub use object::LoxObject;
 
@@ -137,6 +136,23 @@ impl Executor {
                     })
                 }
             }
+            Return(maybe_expr) => {
+                environment::put_immediately(
+                    if let Some(enclosing) = &self.environment.enclosing {
+                        Arc::clone(enclosing)
+                    } else {
+                        Arc::clone(&self.environment)
+                    },
+                    "@Return Value",
+                    if let Some(expr) = maybe_expr {
+                        Either::Left(expr)
+                    } else {
+                        Either::Right(LoxObject::Nil)
+                    },
+                );
+
+                Err(LoxError::Return)
+            }
         }
     }
 }
@@ -203,30 +219,18 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
         }
         Variable(token) => {
             if let Identifier(name) = &token.kind {
-                loop {
-                    let result = environment.get(&environment::env_hash(name));
+                let result = environment.get(&environment::env_hash(name));
 
-                    if let Some(packaged_obj) = result {
-                        match packaged_obj.value() {
-                            PackagedObject::Pending(mtx, cvar) => {
-                                let res = mtx.lock().unwrap();
-
-                                let _ = cvar.wait_while(res, |pending| !*pending);
-                            }
-                            PackagedObject::Ready(val) => match val {
-                                Ok(obj) => {
-                                    return Ok(LoxObject::from(obj));
-                                }
-                                // Make this better in future
-                                Err(e) => return Err(e.clone()),
-                            },
-                        }
-                    } else {
-                        return Err(LoxError::RuntimeError {
-                            line: Some(token.line),
-                            msg: format!("Undefined variable '{name}'"),
-                        });
+                if let Some(pair) = result {
+                    match pair.value().wait_for_value() {
+                        Ok(obj) => Ok(LoxObject::from(obj)),
+                        Err(e) => Err(e.clone()),
                     }
+                } else {
+                    Err(LoxError::RuntimeError {
+                        line: Some(token.line),
+                        msg: format!("Undefined variable '{name}'"),
+                    })
                 }
             } else {
                 Err(LoxError::InternalError(format!(
@@ -297,50 +301,36 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                     res
                 };
 
-                loop {
-                    match environment.get(&hash) {
-                        // DRY! This is repeated in Variable section
-                        // All waiting for packaged object things should be moved into a macro or function
-                        Some(packaged_object) => match packaged_object.value() {
-                            PackagedObject::Pending(mtx, cvar) => {
-                                let res = mtx.lock().unwrap();
+                match environment.get(&hash) {
+                    Some(pair) => match pair.value().wait_for_value() {
+                        Ok(LoxObject::FunctionId(fun_hash)) => {
+                            if let Some(fun) = environment.functions.get(fun_hash) {
+                                let sub_executor = Executor {
+                                    workers: &WORKERS,
+                                    environment: Arc::new(Environment::new_with_parent(
+                                        Arc::clone(&environment),
+                                    )),
+                                };
 
-                                let _ = cvar.wait_while(res, |pending| !*pending);
+                                fun.call(&sub_executor, &arguments)
+                            } else {
+                                Err(LoxError::InternalError(String::from(
+                                    "FunctionId does not point a function!",
+                                )))
                             }
-                            PackagedObject::Ready(function_hash) => match function_hash {
-                                Ok(LoxObject::FunctionId(fun_hash)) => {
-                                    if let Some(fun) = environment.functions.get(fun_hash) {
-                                        let sub_executor = Executor {
-                                            workers: &WORKERS,
-                                            environment: Arc::new(Environment::new_with_parent(
-                                                Arc::clone(&environment),
-                                            )),
-                                        };
-
-                                        return fun.call(&sub_executor, &arguments);
-                                    } else {
-                                        return Err(LoxError::InternalError(String::from(
-                                            "FunctionId does not point a function!",
-                                        )));
-                                    }
-                                }
-                                Ok(obj) => {
-                                    return Err(LoxError::InternalError(format!("Callee does not reference to an function! It references to an {}", obj.to_string())));
-                                }
-                                Err(_) => {
-                                    return Err(LoxError::InternalError(String::from(
-                                        "Invalid state for callee!",
-                                    )))
-                                }
-                            },
-                        },
-                        None => {
-                            return Err(LoxError::RuntimeError {
-                                line: Some(paren.line),
-                                msg: format!("Undefined callable in func '{}'", hash),
-                            })
                         }
-                    }
+                        Ok(obj) => Err(LoxError::InternalError(format!(
+                            "Callee does not reference to an function! It references to an {}",
+                            obj.to_string()
+                        ))),
+                        Err(_) => Err(LoxError::InternalError(String::from(
+                            "Invalid state for callee!",
+                        ))),
+                    },
+                    None => Err(LoxError::RuntimeError {
+                        line: Some(paren.line),
+                        msg: format!("Undefined callable in func '{}'", hash),
+                    }),
                 }
             } else {
                 Err(LoxError::InternalError("Can't find function hash!".into()))
