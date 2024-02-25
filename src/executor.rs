@@ -6,6 +6,8 @@ use either::Either;
 use rayon::ThreadPool;
 
 pub use crate::executor::callable::LoxCallable;
+use crate::executor::environment::env_hash;
+use crate::WORKERS;
 pub use object::LoxObject;
 
 use crate::executor::environment::PackagedObject;
@@ -27,14 +29,7 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub fn new(workers: &'static ThreadPool) -> Executor {
-        Self {
-            environment: Arc::new(Environment::new()),
-            workers,
-        }
-    }
-
-    pub fn new_with_env(workers: &'static ThreadPool, environment: Arc<Environment>) -> Executor {
+    pub fn new(workers: &'static ThreadPool, environment: Arc<Environment>) -> Executor {
         Self {
             environment,
             workers,
@@ -54,12 +49,12 @@ impl Executor {
 
         match stmt.as_ref() {
             StmtExpression(expr) => {
-                eval_expression(Arc::clone(&self.environment), &expr)?;
+                eval_expression(Arc::clone(&self.environment), expr)?;
 
                 Ok(())
             }
             Print(expr) => {
-                let res = eval_expression(Arc::clone(&self.environment), &expr)?;
+                let res = eval_expression(Arc::clone(&self.environment), expr)?;
 
                 println!("{}", res.to_string());
                 Ok(())
@@ -73,7 +68,7 @@ impl Executor {
                             TokenType::Identifier(name) => name,
                             _ => unreachable!(),
                         },
-                        &expr,
+                        expr,
                     );
 
                     Ok(())
@@ -97,7 +92,7 @@ impl Executor {
                         TokenType::Identifier(name) => name,
                         _ => unreachable!(),
                     },
-                    Either::Left(&initializer),
+                    Either::Left(initializer),
                 );
 
                 Ok(())
@@ -112,18 +107,18 @@ impl Executor {
                 sub_executor.execute(Arc::clone(statements))
             }
             If(condition, then_branch, else_branch) => {
-                let condition = bool::from(&eval_expression(self.environment.clone(), &condition)?);
+                let condition = bool::from(&eval_expression(self.environment.clone(), condition)?);
 
                 if condition {
-                    self.eval_statement(Arc::clone(&then_branch))?;
+                    self.eval_statement(Arc::clone(then_branch))?;
                 } else if else_branch.is_some() {
-                    self.eval_statement(Arc::clone(&else_branch.as_ref().unwrap()))?;
+                    self.eval_statement(Arc::clone(else_branch.as_ref().unwrap()))?;
                 }
 
                 Ok(())
             }
             While(condition, body) => {
-                while bool::from(&eval_expression(Arc::clone(&self.environment), &condition)?) {
+                while bool::from(&eval_expression(Arc::clone(&self.environment), condition)?) {
                     self.eval_statement(Arc::clone(body))?;
                 }
 
@@ -131,7 +126,7 @@ impl Executor {
             }
             Function(name, params, body) => {
                 if let TokenType::Identifier(name) = &name.kind {
-                    let fun = LoxCallable::new(params.to_owned(), Arc::clone(body), self);
+                    let fun = LoxCallable::new(params.to_owned(), Arc::clone(body));
                     let fun_hash = environment::env_hash(name);
                     environment::put_function(Arc::clone(&self.environment), fun_hash, fun);
                     Ok(())
@@ -210,6 +205,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
             if let Identifier(name) = &token.kind {
                 loop {
                     let result = environment.get(&environment::env_hash(name));
+
                     if let Some(packaged_obj) = result {
                         match packaged_obj.value() {
                             PackagedObject::Pending(mtx, cvar) => {
@@ -228,7 +224,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                     } else {
                         return Err(LoxError::RuntimeError {
                             line: Some(token.line),
-                            msg: "Undefined variable while calling variable".into(),
+                            msg: format!("Undefined variable '{name}'"),
                         });
                     }
                 }
@@ -314,7 +310,14 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                             PackagedObject::Ready(function_hash) => match function_hash {
                                 Ok(LoxObject::FunctionId(fun_hash)) => {
                                     if let Some(fun) = environment.functions.get(fun_hash) {
-                                        return fun.call(&arguments);
+                                        let sub_executor = Executor {
+                                            workers: &WORKERS,
+                                            environment: Arc::new(Environment::new_with_parent(
+                                                Arc::clone(&environment),
+                                            )),
+                                        };
+
+                                        return fun.call(&sub_executor, &arguments);
                                     } else {
                                         return Err(LoxError::InternalError(String::from(
                                             "FunctionId does not point a function!",
@@ -334,7 +337,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                         None => {
                             return Err(LoxError::RuntimeError {
                                 line: Some(paren.line),
-                                msg: "Undefined callable".into(),
+                                msg: format!("Undefined callable in func '{}'", hash),
                             })
                         }
                     }

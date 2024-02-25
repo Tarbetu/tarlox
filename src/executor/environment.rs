@@ -12,6 +12,7 @@ use super::object::LoxObject;
 use crate::syntax::Expression;
 use crate::LoxResult;
 
+#[derive(Debug)]
 pub enum PackagedObject {
     Pending(Mutex<bool>, Condvar),
     Ready(LoxResult<LoxObject>),
@@ -47,23 +48,11 @@ impl Environment {
         })
     }
 
-    pub fn get_function(&self, key: &u64) -> Option<Ref<'_, u64, LoxCallable, ahash::RandomState>> {
-        self.functions.get(key).or(match &self.enclosing {
-            Some(env) => env.get_function(key),
-            None => None,
-        })
-    }
-
     pub fn remove(&self, key: &u64) -> Option<(u64, PackagedObject)> {
         self.values.remove(key).or(match &self.enclosing {
             Some(env) => env.remove(key),
             None => None,
         })
-    }
-
-    pub fn clear(&self) {
-        self.values.clear();
-        self.functions.clear();
     }
 }
 
