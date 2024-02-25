@@ -220,3 +220,9 @@ impl From<&LoxObject> for LoxObject {
         }
     }
 }
+
+impl From<()> for LoxObject {
+    fn from(_: ()) -> Self {
+        LoxObject::Nil
+    }
+}

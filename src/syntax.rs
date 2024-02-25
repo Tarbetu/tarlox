@@ -12,6 +12,8 @@ pub use statement::Statement;
 
 use rug::Float;
 
+use std::sync::Arc;
+
 #[derive(Debug, Copy, Clone)]
 pub struct Parser<'a> {
     tokens: &'a [Token],
@@ -23,13 +25,13 @@ impl<'a> Parser<'a> {
         Self { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> LoxResult<Vec<Statement>> {
-        let mut statements: Vec<Statement> = vec![];
+    pub fn parse(&mut self) -> LoxResult<Arc<Vec<Arc<Statement>>>> {
+        let mut statements = vec![];
 
         while self.peek().is_some() {
             let program = self.declaration();
             match program {
-                Ok(stmt) => statements.push(stmt),
+                Ok(stmt) => statements.push(Arc::new(stmt)),
                 Err(e) => {
                     self.synchronize();
                     return Err(e);
@@ -37,7 +39,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(statements)
+        Ok(Arc::new(statements))
     }
 
     fn declaration(&mut self) -> LoxResult<Statement> {
@@ -54,7 +56,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Convert 'kind' parameter to enum
+    // Convert 'kind' parameter to enum if needed
     fn function(&mut self, kind: &str) -> LoxResult<Statement> {
         use TokenType::{Comma, Identifier, LeftBrace, LeftParen, RightParen};
 
@@ -199,15 +201,18 @@ impl<'a> Parser<'a> {
         let mut body = self.statement()?;
 
         if let Some(expr) = increment {
-            body = Statement::Block(vec![body, Statement::StmtExpression(expr)]);
+            body = Statement::Block(Arc::new(vec![
+                Arc::new(body),
+                Arc::new(Statement::StmtExpression(expr)),
+            ]));
         }
 
         if let Some(expr) = condition {
             body = Statement::While(expr, body.into())
         }
 
-        if let Some(expr) = initializer {
-            body = Statement::Block(vec![expr, body])
+        if let Some(stmt) = initializer {
+            body = Statement::Block(Arc::new(vec![Arc::new(stmt), Arc::new(body)]))
         }
 
         Ok(body)
@@ -264,12 +269,12 @@ impl<'a> Parser<'a> {
         let mut statements = vec![];
 
         while !self.check(&RightBrace) && self.peek().is_some() {
-            statements.push(self.declaration()?);
+            statements.push(Arc::new(self.declaration()?));
         }
 
         self.consume(RightBrace, None)?;
 
-        Ok(Statement::Block(statements))
+        Ok(Statement::Block(Arc::new(statements)))
     }
 
     fn expression_statement(&mut self) -> LoxResult<Statement> {
@@ -618,7 +623,10 @@ mod tests {
 
     #[test]
     fn test_block_statement() {
-        assert_eq!(create_statement("{}").unwrap(), Statement::Block(vec![]))
+        assert_eq!(
+            create_statement("{}").unwrap(),
+            Statement::Block(Arc::new(vec![]))
+        )
     }
 
     #[test]
@@ -654,7 +662,7 @@ mod tests {
                     kind: Identifier("this_is_function".to_string())
                 },
                 vec![],
-                Statement::Block(vec![]).into()
+                Statement::Block(Arc::new(vec![])).into()
             )
         )
     }

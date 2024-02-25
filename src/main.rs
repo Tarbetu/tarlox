@@ -84,12 +84,12 @@ async fn run_prompt() {
 }
 
 fn run(code: &str, exe: &mut Executor) -> LoxResult<()> {
-    let expr = {
+    let stmt = {
         let tokens = Scanner::new(code).scan_tokens()?;
         Parser::new(&tokens).parse()?
     };
 
-    exe.execute(&expr)?;
+    exe.execute(stmt)?;
 
     Ok(())
 }

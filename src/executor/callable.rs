@@ -1,4 +1,6 @@
-use crate::{syntax::Statement, LoxError, LoxResult, Token};
+use either::Either;
+
+use crate::{executor::environment, syntax::Statement, LoxError, LoxResult, Token};
 
 use super::{object::LoxObject, Environment, Executor};
 
@@ -7,9 +9,8 @@ use std::sync::Arc;
 pub enum LoxCallable {
     Function {
         parameters: Vec<Token>,
-        body: Box<Statement>,
+        body: Arc<Statement>,
         executor: Executor,
-        is_recursive: bool,
     },
     NativeFunction {
         arity: usize,
@@ -18,11 +19,10 @@ pub enum LoxCallable {
 }
 
 impl LoxCallable {
-    pub fn new(parameters: Vec<Token>, body: Box<Statement>, parent_executor: Executor) -> Self {
+    pub fn new(parameters: Vec<Token>, body: Arc<Statement>, parent_executor: &Executor) -> Self {
         Self::Function {
             parameters,
             body,
-            is_recursive: false,
             executor: Executor {
                 environment: Arc::new(Environment::new_with_parent(Arc::clone(
                     &parent_executor.environment,
@@ -55,14 +55,19 @@ impl LoxCallable {
                 parameters,
                 body,
                 executor,
-                is_recursive,
             } => {
-                if *is_recursive {
-                    unimplemented!()
-                } else {
-                    executor.eval_statement(body)?;
-                    Ok(LoxObject::Nil)
+                for (index, arg) in parameters.iter().enumerate() {
+                    environment::put_immediately(
+                        Arc::clone(&executor.environment),
+                        &arg.to_string(),
+                        Either::Right(arguments.get(index).unwrap().into()),
+                    )
                 }
+
+                executor.eval_statement(Arc::clone(body))?;
+                // Remove the result value from environment before cleaning exit
+                executor.environment.clear();
+                Ok(LoxObject::from(()))
             }
             NativeFunction { fun, .. } => fun(arguments),
         }

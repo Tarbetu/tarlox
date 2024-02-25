@@ -60,6 +60,11 @@ impl Environment {
             None => None,
         })
     }
+
+    pub fn clear(&self) {
+        self.values.clear();
+        self.functions.clear();
+    }
 }
 
 macro_rules! create_sub_environment {
@@ -82,7 +87,7 @@ macro_rules! create_sub_environment {
 }
 
 pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr: &Expression) {
-    let key = variable_hash(name);
+    let key = env_hash(name);
 
     // To avoid deadlock, we have to remove the old value
     let existing_key = environment.values.remove(&key);
@@ -112,14 +117,14 @@ pub fn put_immediately(
     name: &str,
     expr_or_obj: Either<&Expression, LoxObject>,
 ) {
-    let key = variable_hash(name);
+    let key = env_hash(name);
     // To avoid deadlock, we have to remove the old value
     let existing_key = environment.values.remove(&key);
 
     let sub_environment = create_sub_environment!(existing_key, environment);
 
     Arc::clone(&environment).values.insert(
-        variable_hash(name),
+        env_hash(name),
         PackagedObject::Ready(match expr_or_obj {
             Left(expr) => eval_expression(sub_environment, expr),
             Right(obj) => Ok(obj),
@@ -138,7 +143,7 @@ pub fn put_function(environment: Arc<Environment>, key: u64, fun: LoxCallable) {
         .insert(key, PackagedObject::Ready(Ok(LoxObject::FunctionId(key))));
 }
 
-pub fn variable_hash(name: &str) -> u64 {
+pub fn env_hash(name: &str) -> u64 {
     let mut hasher = ahash::AHasher::default();
     hasher.write(name.as_bytes());
     hasher.finish()

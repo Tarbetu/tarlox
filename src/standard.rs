@@ -9,7 +9,7 @@ macro_rules! make_function {
     ($env:expr, $arity:expr, $name:ident) => {
         environment::put_function(
             Arc::clone(&$env),
-            environment::variable_hash(stringify!($name)),
+            environment::env_hash(stringify!($name)),
             LoxCallable::NativeFunction {
                 arity: $arity,
                 fun: $name::$name,

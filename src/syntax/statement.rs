@@ -1,4 +1,5 @@
 use crate::Token;
+use std::sync::Arc;
 
 use super::Expression;
 
@@ -8,11 +9,11 @@ pub enum Statement {
     StmtExpression(Expression),
     Var(Token, Option<Expression>),
     AwaitVar(Token, Expression),
-    Block(Vec<Statement>),
+    Block(Arc<Vec<Arc<Statement>>>),
     // Condition        If Branch      Else Branch
-    If(Expression, Box<Statement>, Option<Box<Statement>>),
+    If(Expression, Arc<Statement>, Option<Arc<Statement>>),
     //     Condition     Body
-    While(Expression, Box<Statement>),
+    While(Expression, Arc<Statement>),
     //        Name     Params      Body
-    Function(Token, Vec<Token>, Box<Statement>),
+    Function(Token, Vec<Token>, Arc<Statement>),
 }

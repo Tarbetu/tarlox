@@ -41,25 +41,25 @@ impl Executor {
         }
     }
 
-    pub fn execute(&self, statements: &[Statement]) -> LoxResult<()> {
-        for statement in statements {
-            self.eval_statement(statement)?;
+    pub fn execute(&self, statements: Arc<Vec<Arc<Statement>>>) -> LoxResult<()> {
+        for statement in statements.iter() {
+            self.eval_statement(Arc::clone(statement))?;
         }
 
         Ok(())
     }
 
-    fn eval_statement(&self, stmt: &Statement) -> LoxResult<()> {
+    fn eval_statement(&self, stmt: Arc<Statement>) -> LoxResult<()> {
         use Statement::*;
 
-        match stmt {
+        match stmt.as_ref() {
             StmtExpression(expr) => {
-                eval_expression(Arc::clone(&self.environment), expr)?;
+                eval_expression(Arc::clone(&self.environment), &expr)?;
 
                 Ok(())
             }
             Print(expr) => {
-                let res = eval_expression(Arc::clone(&self.environment), expr)?;
+                let res = eval_expression(Arc::clone(&self.environment), &expr)?;
 
                 println!("{}", res.to_string());
                 Ok(())
@@ -73,7 +73,7 @@ impl Executor {
                             TokenType::Identifier(name) => name,
                             _ => unreachable!(),
                         },
-                        expr,
+                        &expr,
                     );
 
                     Ok(())
@@ -97,7 +97,7 @@ impl Executor {
                         TokenType::Identifier(name) => name,
                         _ => unreachable!(),
                     },
-                    Either::Left(initializer),
+                    Either::Left(&initializer),
                 );
 
                 Ok(())
@@ -109,38 +109,32 @@ impl Executor {
                     environment: Arc::new(Environment::new_with_parent(Arc::clone(&previous))),
                 };
 
-                sub_executor.execute(statements)
+                sub_executor.execute(Arc::clone(statements))
             }
             If(condition, then_branch, else_branch) => {
-                let condition = bool::from(&eval_expression(self.environment.clone(), condition)?);
+                let condition = bool::from(&eval_expression(self.environment.clone(), &condition)?);
 
                 if condition {
-                    self.eval_statement(then_branch)?;
+                    self.eval_statement(Arc::clone(&then_branch))?;
                 } else if else_branch.is_some() {
-                    self.eval_statement(else_branch.as_ref().unwrap())?;
+                    self.eval_statement(Arc::clone(&else_branch.as_ref().unwrap()))?;
                 }
 
                 Ok(())
             }
             While(condition, body) => {
-                while bool::from(&eval_expression(Arc::clone(&self.environment), condition)?) {
-                    self.eval_statement(body)?;
+                while bool::from(&eval_expression(Arc::clone(&self.environment), &condition)?) {
+                    self.eval_statement(Arc::clone(body))?;
                 }
 
                 Ok(())
             }
             Function(name, params, body) => {
                 if let TokenType::Identifier(name) = &name.kind {
-                    // let fun = LoxCallable::new(*params, *body, *self);
-                    // let fun_hash = environment::function_hash(name);
-                    // environment::put_function(Arc::clone(&self.environment), fun_hash, fun);
-                    // environment::put_immediately(
-                    //     self.environment,
-                    //     name,
-                    //     Either::Right(LoxObject::FunctionId(fun_hash)),
-                    // );
-                    // Ok(())
-                    unimplemented!()
+                    let fun = LoxCallable::new(params.to_owned(), Arc::clone(body), self);
+                    let fun_hash = environment::env_hash(name);
+                    environment::put_function(Arc::clone(&self.environment), fun_hash, fun);
+                    Ok(())
                 } else {
                     Err(LoxError::ParseError {
                         line: Some(name.line),
@@ -165,7 +159,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
         Unary(Operator::IsReady, right) => {
             if let Variable(tkn) = right.as_ref() {
                 if let TokenType::Identifier(name) = &tkn.kind {
-                    let name = environment::variable_hash(name);
+                    let name = environment::env_hash(name);
                     if let Some(var) = environment.get(&name) {
                         match var.value() {
                             PackagedObject::Ready(_) => Ok(LoxObject::from(true)),
@@ -215,7 +209,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
         Variable(token) => {
             if let Identifier(name) = &token.kind {
                 loop {
-                    let result = environment.get(&environment::variable_hash(name));
+                    let result = environment.get(&environment::env_hash(name));
                     if let Some(packaged_obj) = result {
                         match packaged_obj.value() {
                             PackagedObject::Pending(mtx, cvar) => {
@@ -247,7 +241,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
         }
         Assign(name_tkn, value_expr) => {
             if let Identifier(name) = &name_tkn.kind {
-                let hash = environment::variable_hash(name);
+                let hash = environment::env_hash(name);
                 if let Some((key, old_val)) = environment.remove(&hash) {
                     let sub_env = Arc::new(Environment::new_with_parent(Arc::clone(&environment)));
                     sub_env.values.insert(key, old_val);
