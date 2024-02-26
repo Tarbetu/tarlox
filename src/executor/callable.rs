@@ -74,7 +74,6 @@ impl LoxCallable {
                     }
                 }
 
-                dbg!(stacker::remaining_stack());
                 let evaluated_statement = stacker::maybe_grow(10240 * 1024, 10240 * 1024, || {
                     executor.eval_statement(Arc::clone(body))
                 });
