@@ -63,6 +63,13 @@ impl Environment {
         })
     }
 
+    pub fn get_function(&self, key: &u64) -> Option<Ref<'_, u64, LoxCallable, ahash::RandomState>> {
+        self.functions.get(key).or(match &self.enclosing {
+            Some(env) => env.get_function(key),
+            None => None,
+        })
+    }
+
     pub fn remove(&self, key: &u64) -> Option<(u64, PackagedObject)> {
         self.values.remove(key).or(match &self.enclosing {
             Some(env) => env.remove(key),
@@ -137,10 +144,6 @@ pub fn put_immediately(
 }
 
 pub fn put_function(environment: Arc<Environment>, key: u64, fun: LoxCallable) {
-    // Analyze function if not native
-    // So check if it's recursive
-    // let is_recursive = false;
-
     environment.functions.insert(key, fun);
     environment
         .values

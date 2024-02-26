@@ -304,7 +304,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                 match environment.get(&hash) {
                     Some(pair) => match pair.value().wait_for_value() {
                         Ok(LoxObject::FunctionId(fun_hash)) => {
-                            if let Some(fun) = environment.functions.get(fun_hash) {
+                            if let Some(fun) = environment.get_function(fun_hash) {
                                 let sub_executor = Executor {
                                     workers: &WORKERS,
                                     environment: Arc::new(Environment::new_with_parent(
