@@ -19,7 +19,7 @@ use rayon::ThreadPoolBuilder;
 use tokio::fs;
 
 // pub const NUMBER_PREC: u32 = rug::float::prec_max();
-pub const NUMBER_PREC: u32 = 2046;
+pub const NUMBER_PREC: u32 = 256;
 
 lazy_static! {
     static ref WORKERS: rayon::ThreadPool = ThreadPoolBuilder::new()
