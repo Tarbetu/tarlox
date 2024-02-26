@@ -74,9 +74,8 @@ impl LoxCallable {
                     }
                 }
 
-                let evaluated_statement = stacker::grow(1000 * 10 * 1024, || {
-                    executor.eval_statement(Arc::clone(body))
-                });
+                let evaluated_statement =
+                    stacker::grow(1000 * 1024, || executor.eval_statement(Arc::clone(body)));
 
                 let result = match evaluated_statement {
                     Ok(()) => Ok(LoxObject::Nil),
