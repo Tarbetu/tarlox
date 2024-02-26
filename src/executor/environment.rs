@@ -1,10 +1,10 @@
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
 use either::Either::{self, Left, Right};
-use rayon::ThreadPool;
 use std::hash::Hasher;
 use std::sync::Mutex;
 use std::sync::{Arc, Condvar};
+use threadpool::ThreadPool;
 
 use super::callable::LoxCallable;
 use super::eval_expression;
@@ -97,7 +97,7 @@ macro_rules! create_sub_environment {
     };
 }
 
-pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr: &Expression) {
+pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr: Arc<Expression>) {
     let key = env_hash(name);
 
     // To avoid deadlock, we have to remove the old value
@@ -111,8 +111,8 @@ pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr
 
     let sub_environment = create_sub_environment!(existing_key, environment);
 
-    workers.install(move || {
-        let value = eval_expression(Arc::clone(&sub_environment), expr);
+    workers.execute(move || {
+        let value = eval_expression(Arc::clone(&sub_environment), &expr);
 
         if let PackagedObject::Pending(mtx, cdv) = sub_environment.get(&key).unwrap().value() {
             *mtx.lock().unwrap() = true;

@@ -10,26 +10,23 @@ pub use crate::scanner::{Token, TokenType};
 use executor::Executor;
 use scanner::Scanner;
 use std::env;
+use std::fs;
 use std::process;
 use std::{num::NonZeroUsize, thread::available_parallelism};
 use syntax::Parser;
 
 use lazy_static::lazy_static;
-use rayon::ThreadPoolBuilder;
-use tokio::fs;
+use threadpool::ThreadPool;
 
 // pub const NUMBER_PREC: u32 = rug::float::prec_max();
 pub const NUMBER_PREC: u32 = 256;
 
 lazy_static! {
-    static ref WORKERS: rayon::ThreadPool = ThreadPoolBuilder::new()
-        .num_threads(
-            available_parallelism()
-                .unwrap_or(NonZeroUsize::new(1).unwrap())
-                .into(),
-        )
-        .build()
-        .unwrap();
+    static ref WORKERS: ThreadPool = ThreadPool::new(
+        available_parallelism()
+            .unwrap_or(NonZeroUsize::new(1).unwrap())
+            .into()
+    );
 }
 
 #[tokio::main]
@@ -44,7 +41,7 @@ async fn main() {
         }
         Equal => {
             let path = &args.next().unwrap();
-            if let Ok(source_code) = fs::read_to_string(path).await {
+            if let Ok(source_code) = fs::read_to_string(path) {
                 let mut exe = Executor::new(&WORKERS, standard::globals());
                 if let Err(e) = run(&source_code, &mut exe) {
                     println!("{e}");

@@ -10,9 +10,9 @@ chrono = "0.4.34"
 dashmap = { version = "5.5.3", features = ["rayon"] }
 either = "1.9.0"
 lazy_static = "1.4.0"
-rayon = "1.8.1"
 rug = "1.24.0"
 rustyline = "13.0.0"
+threadpool = "1.8.1"
 tokio = { version = "1.36.0", features = ["full"] }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

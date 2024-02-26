@@ -7,7 +7,7 @@ use super::Expression;
 pub enum Statement {
     Print(Expression),
     StmtExpression(Expression),
-    Var(Token, Option<Expression>),
+    Var(Token, Option<Arc<Expression>>),
     AwaitVar(Token, Expression),
     Block(Arc<Vec<Arc<Statement>>>),
     // Condition        If Branch      Else Branch

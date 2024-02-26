@@ -3,7 +3,7 @@ pub mod environment;
 pub mod object;
 
 use either::Either;
-use rayon::ThreadPool;
+use threadpool::ThreadPool;
 
 pub use crate::executor::callable::LoxCallable;
 use crate::WORKERS;
@@ -67,7 +67,7 @@ impl Executor {
                             TokenType::Identifier(name) => name,
                             _ => unreachable!(),
                         },
-                        expr,
+                        Arc::clone(expr),
                     );
 
                     Ok(())

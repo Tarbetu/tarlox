@@ -128,7 +128,7 @@ impl<'a> Parser<'a> {
 
             use TokenType::{AwaitVar, Var};
             match token_type {
-                Var => Ok(Statement::Var(name, initializer)),
+                Var => Ok(Statement::Var(name, initializer.map(Arc::new))),
                 AwaitVar => match initializer {
                     Some(init) => Ok(Statement::AwaitVar(name, init)),
                     None => Err(LoxError::ParseError {
