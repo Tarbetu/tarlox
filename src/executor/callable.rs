@@ -1,3 +1,4 @@
+use dashmap::DashMap;
 use either::Either;
 
 use crate::{
@@ -15,6 +16,7 @@ pub enum LoxCallable {
     Function {
         parameters: Vec<Token>,
         body: Arc<Statement>,
+        cache: DashMap<Vec<String>, LoxObject, ahash::RandomState>,
     },
     NativeFunction {
         arity: usize,
@@ -25,7 +27,11 @@ pub enum LoxCallable {
 impl LoxCallable {
     // Add arity check
     pub fn new(parameters: Vec<Token>, body: Arc<Statement>) -> Self {
-        Self::Function { parameters, body }
+        Self::Function {
+            parameters,
+            body,
+            cache: DashMap::with_hasher(ahash::RandomState::new()),
+        }
     }
 
     fn arity(&self) -> usize {
@@ -48,7 +54,16 @@ impl LoxCallable {
         }
 
         match self {
-            Function { parameters, body } => {
+            Function {
+                parameters,
+                body,
+                cache,
+            } => {
+                let cache_key: Vec<String> = arguments.iter().map(|i| i.to_string()).collect();
+                if let Some(early) = cache.get(&cache_key) {
+                    return Ok(early.value().into());
+                };
+
                 for (index, param) in parameters.iter().enumerate() {
                     if let Identifier(name) = &param.kind {
                         environment::put_immediately(
@@ -59,7 +74,12 @@ impl LoxCallable {
                     }
                 }
 
-                match executor.eval_statement(Arc::clone(body)) {
+                dbg!(stacker::remaining_stack());
+                let evaluated_statement = stacker::maybe_grow(10240 * 1024, 10240 * 1024, || {
+                    executor.eval_statement(Arc::clone(body))
+                });
+
+                let result = match evaluated_statement {
                     Ok(()) => Ok(LoxObject::Nil),
                     Err(LoxError::Return) => {
                         match executor
@@ -69,12 +89,22 @@ impl LoxCallable {
                             .1
                             .wait_for_value()
                         {
-                            Ok(val) => Ok(val.into()),
+                            Ok(val) => {
+                                if bool::from(&val.is_not_equal(&LoxObject::Nil)) {
+                                    cache.insert(
+                                        arguments.iter().map(|i| i.to_string()).collect(),
+                                        val.into(),
+                                    );
+                                }
+                                Ok(val.into())
+                            }
                             Err(e) => Err(e.to_owned()),
                         }
                     }
                     error => error.map(|_| LoxObject::Nil),
-                }
+                };
+
+                result
             }
             NativeFunction { fun, .. } => fun(arguments),
         }

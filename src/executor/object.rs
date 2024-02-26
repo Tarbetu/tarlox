@@ -207,6 +207,12 @@ impl ToString for LoxObject {
     }
 }
 
+impl ToString for &LoxObject {
+    fn to_string(&self) -> String {
+        LoxObject::from(*self).to_string()
+    }
+}
+
 impl From<&LoxObject> for LoxObject {
     fn from(value: &LoxObject) -> Self {
         use LoxObject::*;
