@@ -59,10 +59,12 @@ impl LoxCallable {
                 body,
                 cache,
             } => {
-                let cache_key: Vec<String> = arguments.iter().map(|i| i.to_string()).collect();
-                if let Some(early) = cache.get(&cache_key) {
-                    return Ok(early.value().into());
-                };
+                if self.arity() != 0 {
+                    let cache_key: Vec<String> = arguments.iter().map(|i| i.to_string()).collect();
+                    if let Some(early) = cache.get(&cache_key) {
+                        return Ok(early.value().into());
+                    };
+                }
 
                 for (index, param) in parameters.iter().enumerate() {
                     if let Identifier(name) = &param.kind {
@@ -88,7 +90,9 @@ impl LoxCallable {
                             .wait_for_value()
                         {
                             Ok(val) => {
-                                if bool::from(&val.is_not_equal(&LoxObject::Nil)) {
+                                if bool::from(&val.is_not_equal(&LoxObject::Nil))
+                                    && self.arity() != 0
+                                {
                                     cache.insert(
                                         arguments.iter().map(|i| i.to_string()).collect(),
                                         val.into(),
