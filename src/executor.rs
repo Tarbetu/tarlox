@@ -125,7 +125,7 @@ impl Executor {
             }
             Function(name, params, body) => {
                 if let TokenType::Identifier(name) = &name.kind {
-                    let fun = LoxCallable::new(params.to_owned(), Arc::clone(body));
+                    let fun = LoxCallable::new(Arc::new(params.to_owned()), Arc::clone(body));
                     let fun_hash = environment::env_hash(name);
                     environment::put_function(Arc::clone(&self.environment), fun_hash, fun);
                     Ok(())
@@ -312,7 +312,11 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                                     )),
                                 };
 
-                                fun.call(&sub_executor, &arguments)
+                                match fun.call(&sub_executor, &arguments) {
+                                    Ok(Either::Left(obj)) => Ok(obj),
+                                    Ok(Either::Right(_fun)) => unimplemented!(),
+                                    Err(e) => Err(e),
+                                }
                             } else {
                                 Err(LoxError::InternalError(String::from(
                                     "FunctionId does not point a function!",

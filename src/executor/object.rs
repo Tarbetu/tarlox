@@ -3,14 +3,12 @@ use crate::{LoxError, LoxResult, NUMBER_PREC};
 use rug::Float;
 use std::sync::Arc;
 
-// use std::any::Any;
-
 use std::ops;
 
 #[derive(Debug, PartialEq)]
 pub enum LoxObject {
     Nil,
-    // UserDefined(AHashMap<String, LoxObject>),
+    // Class(AHashMap<String, LoxObject>),
     Number(Arc<Float>),
     LoxString(Arc<String>),
     Boolean(bool),
