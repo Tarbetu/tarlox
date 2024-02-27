@@ -1,5 +1,5 @@
 use crate::Token;
-use std::sync::Arc;
+use std::{hash::Hash, sync::Arc};
 
 use super::Expression;
 
@@ -17,4 +17,10 @@ pub enum Statement {
     //        Name     Params      Body
     Function(Token, Vec<Token>, Arc<Statement>),
     Return(Option<Expression>),
+}
+
+impl Hash for Statement {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        format!("{:?}", self).hash(state);
+    }
 }

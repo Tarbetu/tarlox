@@ -5,6 +5,8 @@ use std::sync::Arc;
 
 use std::ops;
 
+use super::LoxCallable;
+
 #[derive(Debug, PartialEq)]
 pub enum LoxObject {
     Nil,
@@ -12,7 +14,7 @@ pub enum LoxObject {
     Number(Arc<Float>),
     LoxString(Arc<String>),
     Boolean(bool),
-    FunctionId(u64),
+    Callable(Arc<LoxCallable>),
 }
 
 impl LoxObject {
@@ -183,6 +185,12 @@ impl From<&Float> for LoxObject {
     }
 }
 
+impl From<LoxCallable> for LoxObject {
+    fn from(value: LoxCallable) -> Self {
+        Self::Callable(Arc::new(value))
+    }
+}
+
 impl ToString for LoxObject {
     fn to_string(&self) -> String {
         use LoxObject::*;
@@ -200,7 +208,7 @@ impl ToString for LoxObject {
                 }
             }
             Boolean(b) => b.to_string(),
-            FunctionId(callable_hash) => format!("<fonk {callable_hash}>"),
+            Callable(callable) => format!("<fun arity: {}>", callable.arity()),
         }
     }
 }
@@ -220,7 +228,7 @@ impl From<&LoxObject> for LoxObject {
             Number(num) => Number(Arc::clone(num)),
             Boolean(bool) => Boolean(*bool),
             Nil => Nil,
-            FunctionId(callable_hash) => FunctionId(*callable_hash),
+            Callable(callable) => Callable(Arc::clone(callable)),
         }
     }
 }

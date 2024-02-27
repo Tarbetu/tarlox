@@ -10,13 +10,17 @@ use crate::{
 
 use super::{object::LoxObject, Executor};
 
-use std::sync::Arc;
+use std::{
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
 
+#[derive(Debug)]
 pub enum LoxCallable {
     Function {
         parameters: Arc<Vec<Token>>,
         body: Arc<Statement>,
-        cache: DashMap<Vec<String>, Either<LoxObject, LoxCallable>, ahash::RandomState>,
+        cache: DashMap<Vec<String>, LoxObject, ahash::RandomState>,
     },
     NativeFunction {
         arity: usize,
@@ -34,7 +38,7 @@ impl LoxCallable {
         }
     }
 
-    fn arity(&self) -> usize {
+    pub fn arity(&self) -> usize {
         use LoxCallable::*;
 
         match self {
@@ -43,11 +47,7 @@ impl LoxCallable {
         }
     }
 
-    pub fn call(
-        &self,
-        executor: &Executor,
-        arguments: &[LoxObject],
-    ) -> LoxResult<Either<LoxObject, LoxCallable>> {
+    pub fn call(&self, executor: &Executor, arguments: &[LoxObject]) -> LoxResult<LoxObject> {
         use LoxCallable::*;
 
         if arguments.len() != self.arity() {
@@ -66,9 +66,7 @@ impl LoxCallable {
                 if self.arity() != 0 {
                     let cache_key: Vec<String> = arguments.iter().map(|i| i.to_string()).collect();
                     if let Some(early) = cache.get(&cache_key) {
-                        return Ok(Either::Left(LoxObject::from(
-                            early.value().as_ref().left().unwrap(),
-                        )));
+                        return Ok(LoxObject::from(early.value()));
                     };
                 }
 
@@ -82,13 +80,8 @@ impl LoxCallable {
                     }
                 }
 
-                let evaluated_statement =
-                    stacker::maybe_grow(1024 * 1024, 100 * 1024 * 1024, || {
-                        executor.eval_statement(Arc::clone(body))
-                    });
-
-                let result = match evaluated_statement {
-                    Ok(()) => Ok(Either::Left(LoxObject::Nil)),
+                let result = match executor.eval_statement(Arc::clone(body)) {
+                    Ok(()) => Ok(LoxObject::Nil),
                     Err(LoxError::Return) => {
                         match executor
                             .environment
@@ -98,37 +91,27 @@ impl LoxCallable {
                             .wait_for_value()
                         {
                             Ok(val) => match val {
-                                LoxObject::Nil => Ok(Either::Left(LoxObject::Nil)),
-                                LoxObject::FunctionId(id) => {
-                                    let fun = executor.environment.get_function(id);
-                                    if let Some(callable) = fun {
-                                        Ok(Either::Right(LoxCallable::from(callable.value())))
-                                    } else {
-                                        Err(LoxError::InternalError(
-                                            "Can't find the function while returning!".to_string(),
-                                        ))
-                                    }
-                                }
+                                LoxObject::Nil => Ok(LoxObject::Nil),
                                 _ => {
                                     if self.arity() != 0 {
                                         cache.insert(
                                             arguments.iter().map(|i| i.to_string()).collect(),
-                                            Either::Left(val.into()),
+                                            val.into(),
                                         );
                                     }
 
-                                    Ok(Either::Left(val.into()))
+                                    Ok(val.into())
                                 }
                             },
                             Err(e) => Err(e.to_owned()),
                         }
                     }
-                    error => error.map(|_| Either::Left(LoxObject::Nil)),
+                    error => error.map(|_| LoxObject::Nil),
                 };
 
                 result
             }
-            NativeFunction { fun, .. } => fun(arguments).map(Either::Left),
+            NativeFunction { fun, .. } => fun(arguments),
         }
     }
 }
@@ -148,3 +131,37 @@ impl From<&LoxCallable> for LoxCallable {
         }
     }
 }
+
+impl Hash for LoxCallable {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        use LoxCallable::*;
+
+        self.arity().hash(state);
+
+        match self {
+            NativeFunction { fun, .. } => fun.hash(state),
+            Function {
+                parameters, body, ..
+            } => {
+                parameters.as_ref().hash(state);
+                body.as_ref().hash(state);
+            }
+        }
+    }
+}
+
+impl PartialEq for LoxCallable {
+    fn eq(&self, other: &Self) -> bool {
+        let mut hashs: [u64; 2] = [0; 2];
+
+        for (index, callable) in [&self, &other].iter().enumerate() {
+            let mut hasher = ahash::AHasher::default();
+            callable.hash(&mut hasher);
+            hashs[index] = hasher.finish();
+        }
+
+        hashs[0] == hashs[1]
+    }
+}
+
+impl Eq for LoxCallable {}

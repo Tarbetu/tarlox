@@ -1,19 +1,19 @@
 mod clock;
 
-use crate::executor::environment;
-use crate::executor::Environment;
-use crate::executor::LoxCallable;
+use crate::executor::{environment, Environment, LoxCallable, LoxObject};
 use std::sync::Arc;
+
+use either::Either;
 
 macro_rules! make_function {
     ($env:expr, $arity:expr, $name:ident) => {
-        environment::put_function(
+        environment::put_immediately(
             Arc::clone(&$env),
-            environment::env_hash(stringify!($name)),
-            LoxCallable::NativeFunction {
+            stringify!($name),
+            Either::Right(LoxObject::from(LoxCallable::NativeFunction {
                 arity: $arity,
                 fun: $name::$name,
-            },
+            })),
         )
     };
 }

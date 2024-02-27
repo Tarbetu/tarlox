@@ -7,8 +7,8 @@ use std::sync::{Arc, Condvar};
 use threadpool::ThreadPool;
 
 use super::callable::LoxCallable;
-use super::eval_expression;
 use super::object::LoxObject;
+use super::{call_stack::CallStack, eval_expression};
 use crate::syntax::Expression;
 use crate::LoxResult;
 
@@ -112,7 +112,7 @@ pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr
     let sub_environment = create_sub_environment!(existing_key, environment);
 
     workers.execute(move || {
-        let value = eval_expression(Arc::clone(&sub_environment), &expr);
+        let value = eval_expression(Arc::clone(&sub_environment), CallStack::new().into(), &expr);
 
         if let PackagedObject::Pending(mtx, cdv) = sub_environment.get(&key).unwrap().value() {
             *mtx.lock().unwrap() = true;
@@ -137,17 +137,10 @@ pub fn put_immediately(
     Arc::clone(&environment).values.insert(
         env_hash(name),
         PackagedObject::Ready(match expr_or_obj {
-            Left(expr) => eval_expression(sub_environment, expr),
+            Left(expr) => eval_expression(sub_environment, CallStack::new().into(), expr),
             Right(obj) => Ok(obj),
         }),
     );
-}
-
-pub fn put_function(environment: Arc<Environment>, key: u64, fun: LoxCallable) {
-    environment.functions.insert(key, fun);
-    environment
-        .values
-        .insert(key, PackagedObject::Ready(Ok(LoxObject::FunctionId(key))));
 }
 
 pub fn env_hash(name: &str) -> u64 {

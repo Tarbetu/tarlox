@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use rug::Float;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -48,4 +50,16 @@ pub enum TokenType {
 
     #[allow(clippy::upper_case_acronyms)]
     EOF,
+}
+
+impl Hash for TokenType {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        use TokenType::*;
+
+        match self {
+            Identifier(str) => format!("IDENT_{str}").hash(state),
+            LoxString(str) => format!("STR_{str}").hash(state),
+            other => format!("{:?}", other).hash(state),
+        }
+    }
 }

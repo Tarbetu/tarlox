@@ -1,3 +1,4 @@
+pub mod call_stack;
 pub mod callable;
 pub mod environment;
 pub mod object;
@@ -5,8 +6,8 @@ pub mod object;
 use either::Either;
 use threadpool::ThreadPool;
 
+use crate::executor::call_stack::CallStack;
 pub use crate::executor::callable::LoxCallable;
-use crate::WORKERS;
 pub use object::LoxObject;
 
 use crate::executor::environment::PackagedObject;
@@ -46,14 +47,16 @@ impl Executor {
     fn eval_statement(&self, stmt: Arc<Statement>) -> LoxResult<()> {
         use Statement::*;
 
+        let call_stack = CallStack::new().into();
+
         match stmt.as_ref() {
             StmtExpression(expr) => {
-                eval_expression(Arc::clone(&self.environment), expr)?;
+                eval_expression(Arc::clone(&self.environment), call_stack, expr)?;
 
                 Ok(())
             }
             Print(expr) => {
-                let res = eval_expression(Arc::clone(&self.environment), expr)?;
+                let res = eval_expression(Arc::clone(&self.environment), call_stack, expr)?;
 
                 println!("{}", res.to_string());
                 Ok(())
@@ -106,7 +109,11 @@ impl Executor {
                 sub_executor.execute(Arc::clone(statements))
             }
             If(condition, then_branch, else_branch) => {
-                let condition = bool::from(&eval_expression(self.environment.clone(), condition)?);
+                let condition = bool::from(&eval_expression(
+                    self.environment.clone(),
+                    call_stack,
+                    condition,
+                )?);
 
                 if condition {
                     self.eval_statement(Arc::clone(then_branch))?;
@@ -117,7 +124,11 @@ impl Executor {
                 Ok(())
             }
             While(condition, body) => {
-                while bool::from(&eval_expression(Arc::clone(&self.environment), condition)?) {
+                while bool::from(&eval_expression(
+                    Arc::clone(&self.environment),
+                    Arc::clone(&call_stack),
+                    condition,
+                )?) {
                     self.eval_statement(Arc::clone(body))?;
                 }
 
@@ -126,8 +137,11 @@ impl Executor {
             Function(name, params, body) => {
                 if let TokenType::Identifier(name) = &name.kind {
                     let fun = LoxCallable::new(Arc::new(params.to_owned()), Arc::clone(body));
-                    let fun_hash = environment::env_hash(name);
-                    environment::put_function(Arc::clone(&self.environment), fun_hash, fun);
+                    environment::put_immediately(
+                        Arc::clone(&self.environment),
+                        name,
+                        Either::Right(LoxObject::from(fun)),
+                    );
                     Ok(())
                 } else {
                     Err(LoxError::ParseError {
@@ -157,12 +171,16 @@ impl Executor {
     }
 }
 
-fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResult<LoxObject> {
+fn eval_expression(
+    environment: Arc<Environment>,
+    call_stack: Arc<CallStack>,
+    expr: &Expression,
+) -> LoxResult<LoxObject> {
     use Expression::*;
     use LoxLiteral::*;
 
     match expr {
-        Grouping(inner) => eval_expression(environment, inner),
+        Grouping(inner) => eval_expression(environment, call_stack, inner),
         Literal(Number(n)) => Ok(LoxObject::from(n)),
         Literal(LoxString(s)) => Ok(LoxObject::from(s.as_str())),
         Literal(Bool(b)) => Ok(LoxObject::from(*b)),
@@ -191,7 +209,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
             }
         }
         Unary(operator, right) => {
-            let right = eval_expression(environment, right)?;
+            let right = eval_expression(environment, call_stack, right)?;
 
             match operator {
                 Operator::Minus => Ok(LoxObject::from(right.apply_negative()?)),
@@ -200,8 +218,8 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
             }
         }
         Binary(left, operator, right) => {
-            let left = eval_expression(environment.clone(), left)?;
-            let right = eval_expression(environment.clone(), right)?;
+            let left = eval_expression(environment.clone(), Arc::clone(&call_stack), left)?;
+            let right = eval_expression(environment.clone(), Arc::clone(&call_stack), right)?;
 
             match operator {
                 Operator::Star => left * right,
@@ -245,7 +263,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                 if let Some((key, old_val)) = environment.remove(&hash) {
                     let sub_env = Arc::new(Environment::new_with_parent(Arc::clone(&environment)));
                     sub_env.values.insert(key, old_val);
-                    let val = eval_expression(Arc::clone(&sub_env), value_expr)?;
+                    let val = eval_expression(Arc::clone(&sub_env), call_stack, value_expr)?;
                     if let Some(parent_env) = &environment.enclosing {
                         environment::put_immediately(
                             Arc::clone(parent_env),
@@ -275,7 +293,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
             }
         }
         Logical(right, operator, left) => {
-            let left = eval_expression(Arc::clone(&environment), left)?;
+            let left = eval_expression(Arc::clone(&environment), Arc::clone(&call_stack), left)?;
 
             if let Operator::Or = operator {
                 if bool::from(&left) {
@@ -285,59 +303,39 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                 return Ok(left);
             }
 
-            eval_expression(environment, right)
+            eval_expression(environment, call_stack, right)
         }
         Call(callee, paren, arguments) => {
-            let callee_id = eval_expression(Arc::clone(&environment), callee)?;
+            let callee =
+                eval_expression(Arc::clone(&environment), Arc::clone(&call_stack), callee)?;
 
-            if let LoxObject::FunctionId(hash) = callee_id {
+            if let LoxObject::Callable(callee) = callee {
                 let arguments = {
                     let mut res = vec![];
 
                     for arg in arguments {
-                        res.push(eval_expression(Arc::clone(&environment), arg)?)
+                        res.push(eval_expression(
+                            Arc::clone(&environment),
+                            Arc::clone(&call_stack),
+                            arg,
+                        )?)
                     }
 
-                    res
+                    Arc::new(res)
                 };
 
-                match environment.get(&hash) {
-                    Some(pair) => match pair.value().wait_for_value() {
-                        Ok(LoxObject::FunctionId(fun_hash)) => {
-                            if let Some(fun) = environment.get_function(fun_hash) {
-                                let sub_executor = Executor {
-                                    workers: &WORKERS,
-                                    environment: Arc::new(Environment::new_with_parent(
-                                        Arc::clone(&environment),
-                                    )),
-                                };
+                // let sub_executor = Executor {
+                //     workers: &WORKERS,
+                //     environment: Arc::new(Environment::new_with_parent(Arc::clone(&environment))),
+                // };
 
-                                match fun.call(&sub_executor, &arguments) {
-                                    Ok(Either::Left(obj)) => Ok(obj),
-                                    Ok(Either::Right(_fun)) => unimplemented!(),
-                                    Err(e) => Err(e),
-                                }
-                            } else {
-                                Err(LoxError::InternalError(String::from(
-                                    "FunctionId does not point a function!",
-                                )))
-                            }
-                        }
-                        Ok(obj) => Err(LoxError::InternalError(format!(
-                            "Callee does not reference to an function! It references to an {}",
-                            obj.to_string()
-                        ))),
-                        Err(_) => Err(LoxError::InternalError(String::from(
-                            "Invalid state for callee!",
-                        ))),
-                    },
-                    None => Err(LoxError::RuntimeError {
-                        line: Some(paren.line),
-                        msg: format!("Undefined callable in func '{}'", hash),
-                    }),
-                }
+                call_stack.add_to_queue(callee, arguments);
+                unimplemented!()
             } else {
-                Err(LoxError::InternalError("Can't find function hash!".into()))
+                Err(LoxError::RuntimeError {
+                    line: Some(paren.line),
+                    msg: "Callee does not match with a function!".into(),
+                })
             }
         }
     }
