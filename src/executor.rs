@@ -159,11 +159,11 @@ impl Executor {
                         Arc::clone(&self.environment)
                     },
                     "@Return Value",
-                    if let Some(expr) = maybe_expr {
-                        Either::Left(expr)
+                    Either::Right(if let Some(expr) = maybe_expr {
+                        eval_expression(Arc::clone(&self.environment), call_stack, expr)?
                     } else {
-                        Either::Right(LoxObject::Nil)
-                    },
+                        LoxObject::Nil
+                    }),
                 );
 
                 Err(LoxError::Return)
