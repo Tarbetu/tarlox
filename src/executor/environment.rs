@@ -6,7 +6,6 @@ use std::sync::Mutex;
 use std::sync::{Arc, Condvar};
 use threadpool::ThreadPool;
 
-use super::callable::LoxCallable;
 use super::object::LoxObject;
 use super::{call_stack::CallStack, eval_expression};
 use crate::syntax::Expression;
@@ -20,15 +19,21 @@ pub enum PackagedObject {
 
 impl PackagedObject {
     pub fn wait_for_value(&self) -> &LoxResult<LoxObject> {
-        loop {
-            match self {
-                Self::Pending(mtx, cvar) => {
-                    let res = mtx.lock().unwrap();
+        match self {
+            Self::Pending(mtx, cvar) => {
+                let res = mtx.lock().unwrap();
 
-                    let _ = cvar.wait_while(res, |pending| !*pending);
-                }
-                Self::Ready(val) => return val,
+                let _ = cvar.wait_while(res, |pending| !*pending);
+                self.wait_for_value()
             }
+            Self::Ready(val) => val,
+        }
+    }
+
+    pub fn is_ready(&self) -> bool {
+        match self {
+            Self::Pending(..) => false,
+            Self::Ready(..) => true,
         }
     }
 }
@@ -36,36 +41,28 @@ impl PackagedObject {
 pub struct Environment {
     pub enclosing: Option<Arc<Environment>>,
     pub values: DashMap<u64, PackagedObject, ahash::RandomState>,
-    pub functions: DashMap<u64, LoxCallable, ahash::RandomState>,
 }
 
-impl Environment {
-    pub fn new() -> Self {
+impl Default for Environment {
+    fn default() -> Self {
         Self {
             values: DashMap::with_hasher(ahash::RandomState::new()),
-            functions: DashMap::with_hasher(ahash::RandomState::new()),
             enclosing: None,
         }
     }
+}
 
+impl Environment {
     pub fn new_with_parent(enclosing: Arc<Environment>) -> Self {
         Self {
             enclosing: Some(enclosing),
             values: DashMap::with_hasher(ahash::RandomState::new()),
-            functions: DashMap::with_hasher(ahash::RandomState::new()),
         }
     }
 
     pub fn get(&self, key: &u64) -> Option<Ref<'_, u64, PackagedObject, ahash::RandomState>> {
         self.values.get(key).or(match &self.enclosing {
             Some(env) => env.get(key),
-            None => None,
-        })
-    }
-
-    pub fn get_function(&self, key: &u64) -> Option<Ref<'_, u64, LoxCallable, ahash::RandomState>> {
-        self.functions.get(key).or(match &self.enclosing {
-            Some(env) => env.get_function(key),
             None => None,
         })
     }
@@ -88,7 +85,6 @@ macro_rules! create_sub_environment {
                 Environment {
                     enclosing: Some(Arc::clone(&$env.clone())),
                     values: new_map,
-                    functions: DashMap::with_hasher(ahash::RandomState::new()),
                 }
                 .into()
             }

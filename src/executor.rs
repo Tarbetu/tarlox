@@ -238,18 +238,27 @@ fn eval_expression(
         }
         Variable(token) => {
             if let Identifier(name) = &token.kind {
-                let result = environment.get(&environment::env_hash(name));
+                loop {
+                    let result = environment.get(&environment::env_hash(name));
 
-                if let Some(pair) = result {
-                    match pair.value().wait_for_value() {
-                        Ok(obj) => Ok(LoxObject::from(obj)),
-                        Err(e) => Err(e.clone()),
+                    if let Some(pair) = result {
+                        match pair.value() {
+                            PackagedObject::Pending(mtx, cvar) => {
+                                let lock = mtx.lock().unwrap();
+
+                                let _ = cvar.wait_while(lock, |pending| !*pending);
+                            }
+                            PackagedObject::Ready(res) => match res {
+                                Ok(obj) => return Ok(LoxObject::from(obj)),
+                                Err(e) => return Err(e.clone()),
+                            },
+                        }
+                    } else {
+                        return Err(LoxError::RuntimeError {
+                            line: Some(token.line),
+                            msg: format!("Undefined variable '{name}'"),
+                        });
                     }
-                } else {
-                    Err(LoxError::RuntimeError {
-                        line: Some(token.line),
-                        msg: format!("Undefined variable '{name}'"),
-                    })
                 }
             } else {
                 Err(LoxError::InternalError(format!(

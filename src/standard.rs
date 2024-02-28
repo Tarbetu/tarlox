@@ -19,7 +19,7 @@ macro_rules! make_function {
 }
 
 pub fn globals() -> Arc<Environment> {
-    let env = Arc::new(Environment::new());
+    let env = Arc::new(Environment::default());
 
     make_function!(env, 0, clock);
 
