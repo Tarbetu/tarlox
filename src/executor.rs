@@ -8,6 +8,7 @@ use threadpool::ThreadPool;
 
 use crate::executor::call_stack::CallStack;
 pub use crate::executor::callable::LoxCallable;
+use crate::WORKERS;
 pub use object::LoxObject;
 
 use crate::executor::environment::PackagedObject;
@@ -324,13 +325,12 @@ fn eval_expression(
                     Arc::new(res)
                 };
 
-                // let sub_executor = Executor {
-                //     workers: &WORKERS,
-                //     environment: Arc::new(Environment::new_with_parent(Arc::clone(&environment))),
-                // };
+                let sub_executor = Executor {
+                    workers: &WORKERS,
+                    environment: Arc::new(Environment::new_with_parent(Arc::clone(&environment))),
+                };
 
-                call_stack.add_to_queue(callee, arguments);
-                unimplemented!()
+                callee.call(&sub_executor, &arguments)
             } else {
                 Err(LoxError::RuntimeError {
                     line: Some(paren.line),
