@@ -2,7 +2,7 @@ use dashmap::DashMap;
 use either::Either;
 
 use crate::{
-    executor::environment::{self, env_hash},
+    executor::environment::{self},
     syntax::Statement,
     LoxError, LoxResult, Token,
     TokenType::Identifier,
@@ -18,6 +18,7 @@ use std::{
 #[derive(Debug)]
 pub enum LoxCallable {
     Function {
+        id: u64,
         parameters: Arc<Vec<Token>>,
         body: Arc<Statement>,
         cache: DashMap<Vec<String>, LoxObject, ahash::RandomState>,
@@ -29,9 +30,18 @@ pub enum LoxCallable {
 }
 
 impl LoxCallable {
-    // Add arity check
     pub fn new(parameters: Arc<Vec<Token>>, body: Arc<Statement>) -> Self {
         Self::Function {
+            id: rand::random(),
+            parameters,
+            body,
+            cache: DashMap::with_hasher(ahash::RandomState::new()),
+        }
+    }
+
+    pub fn new_with_id(parameters: Arc<Vec<Token>>, body: Arc<Statement>, id: u64) -> Self {
+        Self::Function {
+            id,
             parameters,
             body,
             cache: DashMap::with_hasher(ahash::RandomState::new()),
@@ -59,6 +69,7 @@ impl LoxCallable {
 
         match self {
             Function {
+                id,
                 parameters,
                 body,
                 cache,
@@ -82,30 +93,19 @@ impl LoxCallable {
 
                 let result = match executor.eval_statement(Arc::clone(body)) {
                     Ok(()) => Ok(LoxObject::Nil),
-                    Err(LoxError::Return) => {
-                        match executor
-                            .environment
-                            .remove(&env_hash("@Return Value"))
-                            .unwrap()
-                            .1
-                            .wait_for_value()
-                        {
-                            Ok(val) => match val {
-                                LoxObject::Nil => Ok(LoxObject::Nil),
-                                _ => {
-                                    if self.arity() != 0 {
-                                        cache.insert(
-                                            arguments.iter().map(|i| i.to_string()).collect(),
-                                            val.into(),
-                                        );
-                                    }
+                    Err(LoxError::Return(val)) => match val {
+                        LoxObject::Nil => Ok(LoxObject::Nil),
+                        _ => {
+                            if self.arity() != 0 {
+                                cache.insert(
+                                    arguments.iter().map(|i| i.to_string()).collect(),
+                                    LoxObject::from(&val),
+                                );
+                            }
 
-                                    Ok(val.into())
-                                }
-                            },
-                            Err(e) => Err(e.to_owned()),
+                            Ok(val)
                         }
-                    }
+                    },
                     error => error.map(|_| LoxObject::Nil),
                 };
 
@@ -120,10 +120,11 @@ impl From<&LoxCallable> for LoxCallable {
     fn from(callable: &LoxCallable) -> Self {
         match callable {
             LoxCallable::Function {
+                id,
                 parameters,
                 body,
                 cache: _,
-            } => LoxCallable::new(Arc::clone(parameters), Arc::clone(body)),
+            } => LoxCallable::new_with_id(Arc::clone(parameters), Arc::clone(body), *id),
             LoxCallable::NativeFunction { arity, fun } => LoxCallable::NativeFunction {
                 arity: *arity,
                 fun: *fun,
@@ -140,12 +141,7 @@ impl Hash for LoxCallable {
 
         match self {
             NativeFunction { fun, .. } => fun.hash(state),
-            Function {
-                parameters, body, ..
-            } => {
-                parameters.as_ref().hash(state);
-                body.as_ref().hash(state);
-            }
+            Function { id, .. } => id.hash(state),
         }
     }
 }
@@ -165,3 +161,9 @@ impl PartialEq for LoxCallable {
 }
 
 impl Eq for LoxCallable {}
+
+pub struct LoxCall<'a> {
+    callable: LoxCallable,
+    arguments: &'a [LoxObject],
+    executor: &'a Executor,
+}

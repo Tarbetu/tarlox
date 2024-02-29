@@ -6,8 +6,8 @@ use std::sync::Mutex;
 use std::sync::{Arc, Condvar};
 use threadpool::ThreadPool;
 
+use super::eval_expression;
 use super::object::LoxObject;
-use super::{call_stack::CallStack, eval_expression};
 use crate::syntax::Expression;
 use crate::LoxResult;
 
@@ -38,6 +38,7 @@ impl PackagedObject {
     }
 }
 
+#[derive(Debug)]
 pub struct Environment {
     pub enclosing: Option<Arc<Environment>>,
     pub values: DashMap<u64, PackagedObject, ahash::RandomState>,
@@ -108,7 +109,7 @@ pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr
     let sub_environment = create_sub_environment!(existing_key, environment);
 
     workers.execute(move || {
-        let value = eval_expression(Arc::clone(&sub_environment), CallStack::new().into(), &expr);
+        let value = eval_expression(Arc::clone(&sub_environment), &expr);
 
         if let PackagedObject::Pending(mtx, cdv) = sub_environment.get(&key).unwrap().value() {
             *mtx.lock().unwrap() = true;
@@ -133,7 +134,7 @@ pub fn put_immediately(
     Arc::clone(&environment).values.insert(
         env_hash(name),
         PackagedObject::Ready(match expr_or_obj {
-            Left(expr) => eval_expression(sub_environment, CallStack::new().into(), expr),
+            Left(expr) => eval_expression(sub_environment, expr),
             Right(obj) => Ok(obj),
         }),
     );

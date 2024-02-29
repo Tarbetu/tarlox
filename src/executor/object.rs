@@ -238,3 +238,9 @@ impl From<()> for LoxObject {
         LoxObject::Nil
     }
 }
+
+impl Clone for LoxObject {
+    fn clone(&self) -> Self {
+        LoxObject::from(self)
+    }
+}

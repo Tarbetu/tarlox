@@ -4,6 +4,8 @@ use std::{
     io::{self},
 };
 
+use crate::executor::LoxObject;
+
 /// This enum represents the state that we can't continue and
 /// nothing is recueable
 /// We should stop the program and deliver the error message to the user quickly
@@ -19,7 +21,7 @@ pub enum LoxError {
     ExceptedExpression(usize),
     TypeError { excepted_type: String },
     Other(String),
-    Return,
+    Return(LoxObject),
 }
 
 impl Display for LoxError {
@@ -59,7 +61,7 @@ impl Display for LoxError {
             }
             InternalError(msg) => write!(f, "[Internal Error: {msg}]"),
             Other(txt) => write!(f, "[Unexcepted Error from io::Error - {txt}]"),
-            Return => write!(f, "Unhandled return statement."),
+            Return(..) => write!(f, "Unhandled return statement."),
         }
     }
 }
