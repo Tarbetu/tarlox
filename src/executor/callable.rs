@@ -118,7 +118,7 @@ impl LoxCallable {
                     }
 
                     let result = match executor.eval_statement(Arc::clone(body)) {
-                        Ok(()) => Ok(LoxObject::Nil),
+                        Ok(()) => return Ok(LoxObject::Nil),
                         Err(LoxError::Return(inner_env, val)) => match val {
                             None => Ok(LoxObject::Nil),
                             Some(expr) => {
@@ -142,12 +142,15 @@ impl LoxCallable {
 
                                             continue
                                         } else {
+                                            // Not a tail call
                                             eval_expression(inner_env, &expr)?
                                         }
                                     } else {
+                                        // Not callable
                                         eval_expression(inner_env, &expr)?
                                     }
                                 } else {
+                                    // Not a call expression
                                     eval_expression(inner_env, &expr)?
                                 };
 

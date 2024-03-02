@@ -1,7 +1,7 @@
 var a = "global";
 {
   fun showA() {
-    print a;
+    a;
   }
 
   showA();
