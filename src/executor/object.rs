@@ -1,3 +1,4 @@
+use crate::syntax::Expression;
 use crate::{LoxError, LoxResult, NUMBER_PREC};
 
 use rug::Float;
@@ -230,12 +231,6 @@ impl From<&LoxObject> for LoxObject {
             Nil => Nil,
             Callable(callable) => Callable(Arc::clone(callable)),
         }
-    }
-}
-
-impl From<()> for LoxObject {
-    fn from(_: ()) -> Self {
-        LoxObject::Nil
     }
 }
 

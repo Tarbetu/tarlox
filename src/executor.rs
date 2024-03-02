@@ -305,7 +305,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                     environment: Arc::new(Environment::new_with_parent(Arc::clone(&environment))),
                 };
 
-                stacker::grow(1024 * 1024, || callee.call(&sub_executor, arguments))
+                callee.call(&sub_executor, arguments)
             } else {
                 Err(LoxError::RuntimeError {
                     line: Some(paren.line),
@@ -313,9 +313,10 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                 })
             }
         }
-        Lambda(params, body) => Ok(LoxObject::from(LoxCallable::new(
+        Lambda(params, body) => Ok(LoxObject::from(LoxCallable::lambda(
             Arc::new(params.to_owned()),
             Arc::clone(body),
+            Arc::clone(&environment),
         ))),
     }
 }

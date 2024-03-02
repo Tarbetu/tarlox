@@ -15,7 +15,6 @@ rand = "0.8.5"
 reblessive = "0.1.1"
 rug = "1.24.0"
 rustyline = "13.0.0"
-stacker = "0.1.15"
 threadpool = "1.8.1"
 tokio = { version = "1.36.0", features = ["full"] }
 

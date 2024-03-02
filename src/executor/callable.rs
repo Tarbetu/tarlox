@@ -11,7 +11,7 @@ use crate::{
     TokenType::Identifier,
 };
 
-use super::{object::LoxObject, Executor};
+use super::{object::LoxObject, Environment, Executor};
 
 use std::{
     hash::{Hash, Hasher},
@@ -29,6 +29,13 @@ pub enum LoxCallable {
     NativeFunction {
         arity: usize,
         fun: fn(Vec<LoxObject>) -> LoxResult<LoxObject>,
+    },
+    Lambda {
+        id: u64,
+        parameters: Arc<Vec<Token>>,
+        body: Arc<Statement>,
+        environment: Arc<Environment>,
+        cache: DashMap<Vec<String>, LoxObject, ahash::RandomState>,
     },
 }
 
@@ -51,11 +58,25 @@ impl LoxCallable {
         }
     }
 
+    pub fn lambda(
+        parameters: Arc<Vec<Token>>,
+        body: Arc<Statement>,
+        environment: Arc<Environment>,
+    ) -> Self {
+        Self::Lambda {
+            id: rand::random(),
+            parameters,
+            body,
+            environment,
+            cache: DashMap::with_hasher(ahash::RandomState::new()),
+        }
+    }
+
     pub fn arity(&self) -> usize {
         use LoxCallable::*;
 
         match self {
-            Function { parameters, .. } => parameters.len(),
+            Function { parameters, .. } | Lambda { parameters, .. } => parameters.len(),
             NativeFunction { arity, .. } => *arity,
         }
     }
@@ -96,7 +117,7 @@ impl LoxCallable {
                         }
                     }
 
-                    let result = match executor.eval_statement(Arc::clone(body)) {
+                    let mut result = match executor.eval_statement(Arc::clone(body)) {
                         Ok(()) => Ok(LoxObject::Nil),
                         Err(LoxError::Return(inner_env, val)) => match val {
                             None => Ok(LoxObject::Nil),
@@ -141,8 +162,69 @@ impl LoxCallable {
                         },
                         error => error.map(|_| LoxObject::Nil),
                     };
-                    return result;
+
+                    if let Ok(LoxObject::Callable(obj)) = result.as_ref() {
+                        if let LoxCallable::Lambda {
+                            parameters, body, ..
+                        } = obj.as_ref()
+                        {
+                            return Ok(LoxObject::from(LoxCallable::lambda(
+                                Arc::clone(parameters),
+                                Arc::clone(body),
+                                Arc::clone(&executor.environment),
+                            )));
+                        } else {
+                            return result;
+                        }
+                    }
                 }
+            }
+            Lambda {
+                id,
+                parameters,
+                body,
+                environment: lambda_environment,
+                cache,
+            } => {
+                let environment = {
+                    let env = Arc::new(Environment::new_with_parent(Arc::clone(
+                        &executor.environment,
+                    )));
+
+                    for i in lambda_environment.as_ref().values.iter() {
+                        env.values.insert(
+                            *i.key(),
+                            environment::PackagedObject::Ready(match i.value().wait_for_value() {
+                                Ok(obj) => Ok(LoxObject::from(obj)),
+                                Err(e) => Err(e.into()),
+                            }),
+                        );
+                    }
+
+                    env
+                };
+                let executor = Executor {
+                    environment,
+                    workers: executor.workers,
+                };
+                let func = LoxCallable::Function {
+                    id: *id,
+                    parameters: Arc::clone(parameters),
+                    body: Arc::clone(body),
+                    cache: DashMap::with_hasher(ahash::RandomState::new()),
+                };
+                let result = func.call(&executor, arguments);
+
+                if let Self::Function {
+                    cache: sub_cache, ..
+                } = func
+                {
+                    for (key, value) in sub_cache.into_iter() {
+                        cache.insert(key, value);
+                    }
+                }
+
+                result
             }
             NativeFunction { fun, .. } => fun(arguments),
         }
@@ -162,6 +244,19 @@ impl From<&LoxCallable> for LoxCallable {
                 arity: *arity,
                 fun: *fun,
             },
+            LoxCallable::Lambda {
+                id,
+                parameters,
+                body,
+                cache: _,
+                environment,
+            } => LoxCallable::Lambda {
+                id: *id,
+                parameters: Arc::clone(parameters),
+                body: Arc::clone(body),
+                environment: Arc::clone(environment),
+                cache: DashMap::with_hasher(ahash::RandomState::new()),
+            },
         }
     }
 }
@@ -174,7 +269,7 @@ impl Hash for LoxCallable {
 
         match self {
             NativeFunction { fun, .. } => fun.hash(state),
-            Function { id, .. } => id.hash(state),
+            Function { id, .. } | Lambda { id, .. } => id.hash(state),
         }
     }
 }
