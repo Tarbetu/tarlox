@@ -229,6 +229,7 @@ impl<'a> Scanner<'a> {
                 "while" => While,
                 "is_ready" => IsReady,
                 "await_var" => AwaitVar,
+                "lambda" => Lambda,
                 _ => Identifier(string),
             }
         };

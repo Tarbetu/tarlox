@@ -313,5 +313,9 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                 })
             }
         }
+        Lambda(params, body) => Ok(LoxObject::from(LoxCallable::new(
+            Arc::new(params.to_owned()),
+            Arc::clone(body),
+        ))),
     }
 }

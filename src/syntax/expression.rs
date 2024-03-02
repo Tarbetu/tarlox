@@ -1,7 +1,9 @@
 use std::fmt::Display;
+use std::sync::Arc;
 
 use rug::Float;
 
+use super::Statement;
 use crate::{LoxError, Token, TokenType};
 
 #[derive(PartialEq, Debug)]
@@ -14,6 +16,7 @@ pub enum Expression {
     Variable(Token),
     Assign(Token, Box<Expression>),
     Call(Box<Expression>, Token, Vec<Expression>),
+    Lambda(Vec<Token>, Arc<Statement>),
 }
 
 impl Display for Expression {
@@ -44,6 +47,9 @@ impl Display for Expression {
             }
             Call(callee, _paren, arguments) => {
                 write!(f, "({callee} #{arguments:?})")
+            }
+            Lambda(params, _body) => {
+                write!(f, "<lambda arity: {}>", params.len())
             }
         }
     }

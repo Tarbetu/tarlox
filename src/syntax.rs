@@ -55,7 +55,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Convert 'kind' parameter to enum if needed
     fn function(&mut self, kind: &str) -> LoxResult<Statement> {
         use TokenType::{Comma, Identifier, LeftBrace, LeftParen, RightParen};
 
@@ -309,7 +308,7 @@ impl<'a> Parser<'a> {
     fn assignment(&mut self) -> LoxResult<Expression> {
         use TokenType::Equal;
 
-        let expr = self.or()?;
+        let expr = self.lambda()?;
 
         if self.is_match(&[Equal]) {
             let value = self.assignment()?;
@@ -325,6 +324,56 @@ impl<'a> Parser<'a> {
         }
 
         Ok(expr)
+    }
+
+    fn lambda(&mut self) -> LoxResult<Expression> {
+        use TokenType::*;
+
+        if self.is_match(&[Lambda]) {
+            self.consume(LeftParen, Some("Except '(' after lambda".into()))?;
+
+            let parameters = {
+                let mut result = vec![];
+
+                if !(self.check(&RightParen)) {
+                    result.push(
+                        self.consume(
+                            Identifier(String::new()),
+                            Some("Except parameter name.".into()),
+                        )?
+                        .to_owned(),
+                    );
+
+                    while self.is_match(&[Comma]) {
+                        if result.len() >= 255 {
+                            return Err(LoxError::RuntimeError {
+                                line: Some(self.previous().line),
+                                msg: "Can't have more than 255 parameters.".into(),
+                            });
+                        }
+
+                        result.push(
+                            self.consume(
+                                Identifier(String::new()),
+                                Some("Except parameter name.".into()),
+                            )
+                            .map(|i| i.to_owned())?,
+                        )
+                    }
+                }
+
+                self.consume(RightParen, Some("Except ')' after parameters".into()))?;
+                result
+            };
+
+            self.consume(LeftBrace, Some("Except '{' before lambda body".into()))?;
+
+            let body = self.block_statement()?;
+
+            Ok(Expression::Lambda(parameters, body.into()))
+        } else {
+            self.or()
+        }
     }
 
     fn or(&mut self) -> LoxResult<Expression> {
