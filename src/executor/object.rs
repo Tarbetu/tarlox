@@ -1,4 +1,3 @@
-use crate::syntax::Expression;
 use crate::{LoxError, LoxResult, NUMBER_PREC};
 
 use rug::Float;
