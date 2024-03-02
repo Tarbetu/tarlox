@@ -16,7 +16,7 @@ pub enum Statement {
     While(Expression, Arc<Statement>),
     //        Name     Params      Body
     Function(Token, Vec<Token>, Arc<Statement>),
-    Return(Option<Expression>),
+    Return(Option<Arc<Expression>>),
 }
 
 impl Hash for Statement {

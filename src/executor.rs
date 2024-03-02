@@ -2,7 +2,7 @@ pub mod callable;
 pub mod environment;
 pub mod object;
 
-use either::Either;
+use either::Either::{self, Left, Right};
 use threadpool::ThreadPool;
 
 pub use crate::executor::callable::LoxCallable;
@@ -78,7 +78,7 @@ impl Executor {
                             TokenType::Identifier(name) => name,
                             _ => unreachable!(),
                         },
-                        Either::Right(LoxObject::Nil),
+                        Right(LoxObject::Nil),
                     );
 
                     Ok(())
@@ -91,7 +91,7 @@ impl Executor {
                         TokenType::Identifier(name) => name,
                         _ => unreachable!(),
                     },
-                    Either::Left(initializer),
+                    Left(initializer),
                 );
 
                 Ok(())
@@ -129,7 +129,7 @@ impl Executor {
                     environment::put_immediately(
                         Arc::clone(&self.environment),
                         name,
-                        Either::Right(LoxObject::from(fun)),
+                        Right(LoxObject::from(fun)),
                     );
                     Ok(())
                 } else {
@@ -139,15 +139,10 @@ impl Executor {
                     })
                 }
             }
-            Return(maybe_expr) => {
-                let lox_result = if let Some(expr) = maybe_expr {
-                    eval_expression(Arc::clone(&self.environment), expr)?
-                } else {
-                    LoxObject::Nil
-                };
-
-                Err(LoxError::Return(lox_result))
-            }
+            Return(maybe_expr) => Err(LoxError::Return(
+                Arc::clone(&self.environment),
+                maybe_expr.as_ref().map(Arc::clone),
+            )),
         }
     }
 }
@@ -189,7 +184,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
             let right = eval_expression(environment, right)?;
 
             match operator {
-                Operator::Minus => Ok(LoxObject::from(right.apply_negative()?)),
+                Operator::Minus => Ok(LoxObject::from(&right.apply_negative()?)),
                 Operator::Not => Ok(LoxObject::from(!bool::from(&right))),
                 _ => unreachable!(),
             }
@@ -226,7 +221,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                             }
                             PackagedObject::Ready(res) => match res {
                                 Ok(obj) => return Ok(LoxObject::from(obj)),
-                                Err(e) => return Err(e.clone()),
+                                Err(e) => return Err(e.into()),
                             },
                         }
                     } else {
@@ -302,7 +297,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                         res.push(eval_expression(Arc::clone(&environment), arg)?)
                     }
 
-                    Arc::new(res)
+                    res
                 };
 
                 let sub_executor = Executor {
@@ -310,7 +305,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                     environment: Arc::new(Environment::new_with_parent(Arc::clone(&environment))),
                 };
 
-                stacker::grow(1024 * 1024, || callee.call(&sub_executor, &arguments))
+                stacker::grow(1024 * 1024, || callee.call(&sub_executor, arguments))
             } else {
                 Err(LoxError::RuntimeError {
                     line: Some(paren.line),

@@ -2,8 +2,11 @@ use dashmap::DashMap;
 use either::Either;
 
 use crate::{
-    executor::environment::{self},
-    syntax::Statement,
+    executor::{
+        environment::{self},
+        eval_expression,
+    },
+    syntax::{Expression, Statement},
     LoxError, LoxResult, Token,
     TokenType::Identifier,
 };
@@ -25,7 +28,7 @@ pub enum LoxCallable {
     },
     NativeFunction {
         arity: usize,
-        fun: fn(&[LoxObject]) -> LoxResult<LoxObject>,
+        fun: fn(Vec<LoxObject>) -> LoxResult<LoxObject>,
     },
 }
 
@@ -57,7 +60,7 @@ impl LoxCallable {
         }
     }
 
-    pub fn call(&self, executor: &Executor, arguments: &[LoxObject]) -> LoxResult<LoxObject> {
+    pub fn call(&self, executor: &Executor, mut arguments: Vec<LoxObject>) -> LoxResult<LoxObject> {
         use LoxCallable::*;
 
         if arguments.len() != self.arity() {
@@ -69,47 +72,77 @@ impl LoxCallable {
 
         match self {
             Function {
-                id,
                 parameters,
                 body,
                 cache,
+                ..
             } => {
-                if self.arity() != 0 {
-                    let cache_key: Vec<String> = arguments.iter().map(|i| i.to_string()).collect();
-                    if let Some(early) = cache.get(&cache_key) {
-                        return Ok(LoxObject::from(early.value()));
-                    };
-                }
-
-                for (index, param) in parameters.iter().enumerate() {
-                    if let Identifier(name) = &param.kind {
-                        environment::put_immediately(
-                            Arc::clone(&executor.environment),
-                            name,
-                            Either::Right(arguments.get(index).unwrap().into()),
-                        )
+                loop {
+                    if self.arity() != 0 {
+                        let cache_key: Vec<String> =
+                            arguments.iter().map(|i| i.to_string()).collect();
+                        if let Some(early) = cache.get(&cache_key) {
+                            return Ok(LoxObject::from(early.value()));
+                        };
                     }
-                }
 
-                let result = match executor.eval_statement(Arc::clone(body)) {
-                    Ok(()) => Ok(LoxObject::Nil),
-                    Err(LoxError::Return(val)) => match val {
-                        LoxObject::Nil => Ok(LoxObject::Nil),
-                        _ => {
-                            if self.arity() != 0 {
-                                cache.insert(
-                                    arguments.iter().map(|i| i.to_string()).collect(),
-                                    LoxObject::from(&val),
-                                );
-                            }
-
-                            Ok(val)
+                    for (index, param) in parameters.iter().enumerate() {
+                        if let Identifier(name) = &param.kind {
+                            environment::put_immediately(
+                                Arc::clone(&executor.environment),
+                                name,
+                                Either::Right(arguments.get(index).unwrap().into()),
+                            )
                         }
-                    },
-                    error => error.map(|_| LoxObject::Nil),
-                };
+                    }
 
-                result
+                    let result = match executor.eval_statement(Arc::clone(body)) {
+                        Ok(()) => Ok(LoxObject::Nil),
+                        Err(LoxError::Return(inner_env, val)) => match val {
+                            None => Ok(LoxObject::Nil),
+                            Some(expr) => {
+                                let val =
+                                // This seems like a mess. Everywhere is filled with eval_expression!
+                                if let Expression::Call(callee, _paren, uneval_inner_arguments) = expr.as_ref() {
+                                    let callee = eval_expression(Arc::clone(&inner_env), callee)?;
+                                    if let LoxObject::Callable(callable) = callee {
+                                        // Tail call
+                                        if callable.as_ref() == self {
+                                            arguments = {
+                                                    let mut res = vec![];
+
+                                                    for arg in uneval_inner_arguments {
+                                                        res.push(eval_expression(Arc::clone(&inner_env), arg)?);
+                                                    }
+
+                                                    res
+                                                };
+
+                                            continue
+                                        } else {
+                                            eval_expression(inner_env, &expr)?
+                                        }
+                                    } else {
+                                        eval_expression(inner_env, &expr)?
+                                    }
+                                } else {
+                                    eval_expression(inner_env, &expr)?
+                                };
+
+                                if self.arity() != 0 {
+                                    cache.insert(
+                                        arguments.iter().map(|i| i.to_string()).collect(),
+                                        LoxObject::from(&val),
+                                    );
+                                }
+
+                                Ok(val)
+                            }
+                        },
+                        error => error.map(|_| LoxObject::Nil),
+                    };
+                    return result;
+                }
             }
             NativeFunction { fun, .. } => fun(arguments),
         }
@@ -150,7 +183,7 @@ impl PartialEq for LoxCallable {
     fn eq(&self, other: &Self) -> bool {
         let mut hashs: [u64; 2] = [0; 2];
 
-        for (index, callable) in [&self, &other].iter().enumerate() {
+        for (index, callable) in [self, other].iter().enumerate() {
             let mut hasher = ahash::AHasher::default();
             callable.hash(&mut hasher);
             hashs[index] = hasher.finish();
@@ -161,9 +194,3 @@ impl PartialEq for LoxCallable {
 }
 
 impl Eq for LoxCallable {}
-
-pub struct LoxCall<'a> {
-    callable: LoxCallable,
-    arguments: &'a [LoxObject],
-    executor: &'a Executor,
-}

@@ -2,15 +2,13 @@ use core::fmt;
 use std::{
     fmt::Display,
     io::{self},
+    sync::Arc,
 };
 
-use crate::executor::LoxObject;
+use crate::executor::Environment;
+use crate::syntax::Expression;
 
-/// This enum represents the state that we can't continue and
-/// nothing is recueable
-/// We should stop the program and deliver the error message to the user quickly
-/// after creating the LoxError object.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum LoxError {
     FileError,
     UnexceptedCharacter { line: usize, character: char },
@@ -21,7 +19,7 @@ pub enum LoxError {
     ExceptedExpression(usize),
     TypeError { excepted_type: String },
     Other(String),
-    Return(LoxObject),
+    Return(Arc<Environment>, Option<Arc<Expression>>),
 }
 
 impl Display for LoxError {
@@ -74,5 +72,11 @@ impl From<io::Error> for LoxError {
             NotFound | PermissionDenied => Self::FileError,
             other => Self::Other(other.to_string()),
         }
+    }
+}
+
+impl From<&LoxError> for LoxError {
+    fn from(value: &LoxError) -> Self {
+        unimplemented!()
     }
 }

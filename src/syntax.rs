@@ -258,7 +258,7 @@ impl<'a> Parser<'a> {
 
         let value = {
             if !self.check(&Semicolon) {
-                Some(self.expression()?)
+                Some(Arc::new(self.expression()?))
             } else {
                 None
             }
