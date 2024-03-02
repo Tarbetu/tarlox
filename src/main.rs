@@ -40,6 +40,7 @@ async fn main() {
             process::exit(64);
         }
         Equal => {
+            let _ = &args.next();
             let path = &args.next().unwrap();
             if let Ok(source_code) = fs::read_to_string(path) {
                 let mut exe = Executor::new(&WORKERS, standard::globals());
@@ -48,7 +49,7 @@ async fn main() {
                     process::exit(65)
                 }
             } else {
-                println!("File not found");
+                println!("File not found: {path}");
                 process::exit(65)
             }
 
