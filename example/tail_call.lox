@@ -1,0 +1,12 @@
+fun factorial(x) {
+	fun factorial(acc, n) {
+		if (n < 2) {
+			return acc;
+		}
+		return factorial(acc * n, n - 1);
+	}
+
+	return factorial(1, x);
+}
+
+print factorial(666);
