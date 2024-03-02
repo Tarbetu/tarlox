@@ -117,7 +117,7 @@ impl LoxCallable {
                         }
                     }
 
-                    let mut result = match executor.eval_statement(Arc::clone(body)) {
+                    let result = match executor.eval_statement(Arc::clone(body)) {
                         Ok(()) => Ok(LoxObject::Nil),
                         Err(LoxError::Return(inner_env, val)) => match val {
                             None => Ok(LoxObject::Nil),
@@ -126,6 +126,7 @@ impl LoxCallable {
                                 // This seems like a mess. Everywhere is filled with eval_expression!
                                 if let Expression::Call(callee, _paren, uneval_inner_arguments) = expr.as_ref() {
                                     let callee = eval_expression(Arc::clone(&inner_env), callee)?;
+
                                     if let LoxObject::Callable(callable) = callee {
                                         // Tail call
                                         if callable.as_ref() == self {
