@@ -77,6 +77,32 @@ impl From<io::Error> for LoxError {
 
 impl From<&LoxError> for LoxError {
     fn from(value: &LoxError) -> Self {
-        unimplemented!()
+        use LoxError::*;
+
+        // Strict copy?
+        // Maybe we can prefer a Rc
+        match value {
+            FileError => FileError,
+            UnterminatedString => UnterminatedString,
+            UnexceptedCharacter { line, character } => UnexceptedCharacter {
+                line: *line,
+                character: *character,
+            },
+            ParseError { line, msg } => ParseError {
+                line: *line,
+                msg: msg.to_owned(),
+            },
+            RuntimeError { line, msg } => RuntimeError {
+                line: *line,
+                msg: msg.to_owned(),
+            },
+            InternalError(str) => InternalError(str.to_owned()),
+            ExceptedExpression(line) => ExceptedExpression(*line),
+            TypeError { excepted_type } => TypeError {
+                excepted_type: excepted_type.to_owned(),
+            },
+            Other(str) => Other(str.to_owned()),
+            Return(env, expr) => Return(Arc::clone(env), expr.as_ref().map(Arc::clone)),
+        }
     }
 }

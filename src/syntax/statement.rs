@@ -3,7 +3,7 @@ use std::{hash::Hash, sync::Arc};
 
 use super::Expression;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Statement {
     Print(Expression),
     StmtExpression(Expression),

@@ -210,6 +210,7 @@ impl LoxCallable {
                 let executor = Executor {
                     environment,
                     workers: executor.workers,
+                    locals: DashMap::with_hasher(ahash::RandomState::new()),
                 };
                 let func = LoxCallable::Function {
                     id: *id,

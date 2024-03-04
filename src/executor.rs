@@ -2,10 +2,12 @@ pub mod callable;
 pub mod environment;
 pub mod object;
 
+use dashmap::DashMap;
 use either::Either::{self, Left, Right};
 use threadpool::ThreadPool;
 
 pub use crate::executor::callable::LoxCallable;
+use crate::Token;
 use crate::WORKERS;
 pub use object::LoxObject;
 
@@ -22,17 +24,29 @@ pub use environment::Environment;
 
 use std::sync::Arc;
 
-pub struct Executor {
+pub struct Executor<'a> {
     environment: Arc<Environment>,
-    workers: &'static ThreadPool,
+    workers: &'a ThreadPool,
+    locals: DashMap<&'a Expression, usize, ahash::RandomState>,
 }
 
-impl Executor {
-    pub fn new(workers: &'static ThreadPool, environment: Arc<Environment>) -> Executor {
+impl<'a> Executor<'a> {
+    pub fn new(workers: &'a ThreadPool, environment: Arc<Environment>) -> Executor {
         Self {
             environment,
             workers,
+            locals: DashMap::with_hasher(ahash::RandomState::new()),
         }
+    }
+
+    pub fn resolve(&self, expr: &'a Expression, depth: usize) {
+        self.locals.insert(expr, depth);
+    }
+
+    pub fn lookup_variable(&self, key: &u64, expr: &'a Expression) -> Option<LoxObject> {
+        self.locals
+            .get(expr)
+            .map(|distance| self.environment.get_at(*distance, key))
     }
 
     pub fn execute(&self, statements: Arc<Vec<Arc<Statement>>>) -> LoxResult<()> {
@@ -101,6 +115,7 @@ impl Executor {
                 let sub_executor = Executor {
                     workers: self.workers,
                     environment: Arc::new(Environment::new_with_parent(Arc::clone(&previous))),
+                    locals: DashMap::with_hasher(ahash::RandomState::new()),
                 };
 
                 sub_executor.execute(Arc::clone(statements))
@@ -303,6 +318,7 @@ fn eval_expression(environment: Arc<Environment>, expr: &Expression) -> LoxResul
                 let sub_executor = Executor {
                     workers: &WORKERS,
                     environment: Arc::new(Environment::new_with_parent(Arc::clone(&environment))),
+                    locals: DashMap::with_hasher(ahash::RandomState::new()),
                 };
 
                 callee.call(&sub_executor, arguments)

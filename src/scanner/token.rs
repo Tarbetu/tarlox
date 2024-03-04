@@ -19,3 +19,5 @@ impl Hash for Token {
         self.kind.hash(state);
     }
 }
+
+impl Eq for Token {}

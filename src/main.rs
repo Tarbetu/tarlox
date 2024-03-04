@@ -1,5 +1,6 @@
 mod errors;
 mod executor;
+mod resolver;
 mod scanner;
 mod standard;
 mod syntax;

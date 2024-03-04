@@ -74,6 +74,10 @@ impl Environment {
             None => None,
         })
     }
+
+    pub fn get_at(&self, distance: usize, key: &u64) -> LoxObject {
+        unimplemented!()
+    }
 }
 
 macro_rules! create_sub_environment {

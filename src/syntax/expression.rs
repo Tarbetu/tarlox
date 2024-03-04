@@ -6,7 +6,7 @@ use rug::Float;
 use super::Statement;
 use crate::{LoxError, Token, TokenType};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Hash, Debug)]
 pub enum Expression {
     Binary(Box<Expression>, Operator, Box<Expression>),
     Unary(Operator, Box<Expression>),
@@ -76,7 +76,22 @@ impl Display for LoxLiteral {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+impl std::hash::Hash for LoxLiteral {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        use LoxLiteral::*;
+
+        match self {
+            Nil => "NIL_LIT".hash(state),
+            LoxString(str) => format!("LOX_LIT_STR_{str}").hash(state),
+            Bool(b) => format!("BOOL_LIT_{b}").hash(state),
+            Number(float) => format!("NUMBER_LIT_{float}").hash(state),
+        }
+    }
+}
+
+impl Eq for LoxLiteral {}
+
+#[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]
 pub enum Operator {
     Equality,
     NotEqual,
