@@ -2,10 +2,7 @@ use dashmap::DashMap;
 use either::Either;
 
 use crate::{
-    executor::{
-        environment::{self},
-        eval_expression,
-    },
+    executor::environment::{self},
     syntax::{Expression, Statement},
     LoxError, LoxResult, Token,
     TokenType::Identifier,
@@ -111,6 +108,7 @@ impl LoxCallable {
                         if let Identifier(name) = &param.kind {
                             environment::put_immediately(
                                 Arc::clone(&executor.environment),
+                                Arc::clone(&executor.locals),
                                 name,
                                 Either::Right(arguments.get(index).unwrap().into()),
                             )
@@ -122,10 +120,15 @@ impl LoxCallable {
                         Err(LoxError::Return(inner_env, val)) => match val {
                             None => Ok(LoxObject::Nil),
                             Some(expr) => {
+                                let sub_executor = Executor {
+                                    environment: Arc::clone(&inner_env),
+                                    locals: Arc::clone(&executor.locals),
+                                    workers: executor.workers,
+                                };
                                 let val =
                                 // This seems like a mess. Everywhere is filled with eval_expression!
                                 if let Expression::Call(callee, _paren, uneval_inner_arguments) = expr.as_ref() {
-                                    let callee = eval_expression(Arc::clone(&inner_env), callee)?;
+                                    let callee = sub_executor.eval_expression(callee)?;
 
                                     if let LoxObject::Callable(callable) = callee {
                                         // Tail call
@@ -134,7 +137,7 @@ impl LoxCallable {
                                                     let mut res = vec![];
 
                                                     for arg in uneval_inner_arguments {
-                                                        res.push(eval_expression(Arc::clone(&inner_env), arg)?);
+                                                        res.push(sub_executor.eval_expression(arg)?);
                                                     }
 
                                                     res
@@ -143,15 +146,15 @@ impl LoxCallable {
                                             continue
                                         } else {
                                             // Not a tail call
-                                            eval_expression(inner_env, &expr)?
+                                            sub_executor.eval_expression(&expr)?
                                         }
                                     } else {
                                         // Not callable
-                                        eval_expression(inner_env, &expr)?
+                                        sub_executor.eval_expression(&expr)?
                                     }
                                 } else {
                                     // Not a call expression
-                                    eval_expression(inner_env, &expr)?
+                                    sub_executor.eval_expression(&expr)?
                                 };
 
                                 if self.arity() != 0 {
@@ -210,7 +213,7 @@ impl LoxCallable {
                 let executor = Executor {
                     environment,
                     workers: executor.workers,
-                    locals: DashMap::with_hasher(ahash::RandomState::new()),
+                    locals: Arc::clone(&executor.locals),
                 };
                 let func = LoxCallable::Function {
                     id: *id,

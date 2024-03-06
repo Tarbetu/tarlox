@@ -4,12 +4,11 @@ use either::Either::{self, Left, Right};
 use std::hash::Hasher;
 use std::sync::Mutex;
 use std::sync::{Arc, Condvar};
-use threadpool::ThreadPool;
 
-use super::eval_expression;
 use super::object::LoxObject;
+use super::{Executor, LocalsMap};
 use crate::syntax::Expression;
-use crate::LoxResult;
+use crate::{LoxResult, WORKERS};
 
 #[derive(Debug)]
 pub enum PackagedObject {
@@ -75,8 +74,30 @@ impl Environment {
         })
     }
 
-    pub fn get_at(&self, distance: usize, key: &u64) -> LoxObject {
-        unimplemented!()
+    pub fn get_at(
+        &self,
+        distance: usize,
+        key: &u64,
+    ) -> Option<Ref<'_, u64, PackagedObject, ahash::RandomState>> {
+        self.ancestor(distance)?.values.get(key)
+    }
+
+    pub fn assign_at(&self, distance: usize, key: u64, value: LoxObject) -> Option<()> {
+        self.ancestor(distance)?
+            .values
+            .insert(key, PackagedObject::Ready(Ok(value)));
+
+        Some(())
+    }
+
+    pub fn ancestor(&self, distance: usize) -> Option<&Self> {
+        let mut environment = self;
+
+        for _ in 0..distance {
+            environment = environment.enclosing.as_ref()?;
+        }
+
+        Some(environment)
     }
 }
 
@@ -98,7 +119,7 @@ macro_rules! create_sub_environment {
     };
 }
 
-pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr: Arc<Expression>) {
+pub fn put(environment: Arc<Environment>, locals: LocalsMap, name: &str, expr: Arc<Expression>) {
     let key = env_hash(name);
 
     // To avoid deadlock, we have to remove the old value
@@ -112,8 +133,14 @@ pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr
 
     let sub_environment = create_sub_environment!(existing_key, environment);
 
-    workers.execute(move || {
-        let value = eval_expression(Arc::clone(&sub_environment), &expr);
+    let executor = Executor {
+        workers: &WORKERS,
+        environment: Arc::clone(&sub_environment),
+        locals: Arc::clone(&locals),
+    };
+
+    WORKERS.execute(move || {
+        let value = executor.eval_expression(&expr);
 
         if let PackagedObject::Pending(mtx, cdv) = sub_environment.get(&key).unwrap().value() {
             *mtx.lock().unwrap() = true;
@@ -126,6 +153,7 @@ pub fn put(environment: Arc<Environment>, workers: &ThreadPool, name: &str, expr
 
 pub fn put_immediately(
     environment: Arc<Environment>,
+    locals: LocalsMap,
     name: &str,
     expr_or_obj: Either<&Expression, LoxObject>,
 ) {
@@ -134,11 +162,16 @@ pub fn put_immediately(
     let existing_key = environment.values.remove(&key);
 
     let sub_environment = create_sub_environment!(existing_key, environment);
+    let sub_executor = Executor {
+        environment: sub_environment,
+        locals,
+        workers: &WORKERS,
+    };
 
     Arc::clone(&environment).values.insert(
         env_hash(name),
         PackagedObject::Ready(match expr_or_obj {
-            Left(expr) => eval_expression(sub_environment, expr),
+            Left(expr) => sub_executor.eval_expression(expr),
             Right(obj) => Ok(obj),
         }),
     );

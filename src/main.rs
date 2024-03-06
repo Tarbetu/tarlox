@@ -9,10 +9,12 @@ pub use crate::errors::LoxError;
 pub use crate::errors::LoxResult;
 pub use crate::scanner::{Token, TokenType};
 use executor::Executor;
+use resolver::Resolver;
 use scanner::Scanner;
 use std::env;
 use std::fs;
 use std::process;
+use std::sync::Arc;
 use std::{num::NonZeroUsize, thread::available_parallelism};
 use syntax::Parser;
 
@@ -44,8 +46,9 @@ async fn main() {
             let _ = &args.next();
             let path = &args.next().unwrap();
             if let Ok(source_code) = fs::read_to_string(path) {
-                let mut exe = Executor::new(&WORKERS, standard::globals());
-                if let Err(e) = run(&source_code, &mut exe) {
+                let exe = Executor::new(&WORKERS, standard::globals());
+
+                if let Err(e) = run(&source_code, &exe) {
                     println!("{e}");
                     process::exit(65)
                 }
@@ -61,7 +64,7 @@ async fn main() {
 }
 
 async fn run_prompt() {
-    let mut exe = Executor::new(&WORKERS, standard::globals());
+    let exe = Executor::new(&WORKERS, standard::globals());
 
     let mut rl = rustyline::DefaultEditor::new().unwrap();
     loop {
@@ -73,7 +76,7 @@ async fn run_prompt() {
                     break;
                 };
 
-                if let Err(e) = run(&input, &mut exe) {
+                if let Err(e) = run(&input, &exe) {
                     println!("{e}\n");
                 };
             }
@@ -82,13 +85,15 @@ async fn run_prompt() {
     }
 }
 
-fn run(code: &str, exe: &mut Executor) -> LoxResult<()> {
+fn run(code: &str, exe: &Executor) -> LoxResult<()> {
     let stmt = {
         let tokens = Scanner::new(code).scan_tokens()?;
         Parser::new(&tokens).parse()?
     };
 
-    exe.execute(stmt)?;
+    Resolver::new(exe).resolve(Arc::clone(&stmt))?;
+
+    exe.execute(Arc::clone(&stmt))?;
 
     Ok(())
 }

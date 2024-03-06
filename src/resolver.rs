@@ -1,4 +1,5 @@
 use ahash::AHashMap;
+use std::sync::Arc;
 
 use crate::{
     executor::Executor,
@@ -7,22 +8,31 @@ use crate::{
     LoxResult, Token, TokenType,
 };
 
-struct Resolver<'a> {
-    executor: Executor<'a>,
+pub struct Resolver<'a> {
+    executor: &'a Executor,
     scopes: Vec<AHashMap<String, bool>>,
 }
 
 impl<'a> Resolver<'a> {
-    fn resolve(&mut self, statements: &[&'a Statement]) -> LoxResult<()> {
-        self.begin_scope()?;
-        for statement in statements {
+    pub fn new(executor: &'a Executor) -> Self {
+        Self {
+            executor,
+            scopes: vec![],
+        }
+    }
+    pub fn resolve(&mut self, statements: Arc<Vec<Arc<Statement>>>) -> LoxResult<()> {
+        self.begin_scope();
+
+        for statement in statements.iter() {
             self.resolve_statement(statement)?;
         }
-        self.end_scope()?;
+
+        self.end_scope();
+
         Ok(())
     }
 
-    fn resolve_statement(&mut self, statement: &'a Statement) -> LoxResult<()> {
+    fn resolve_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         use Statement::*;
 
         match statement {
@@ -38,7 +48,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_expression(&mut self, expression: &'a Expression) -> LoxResult<()> {
+    fn resolve_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         use Expression::*;
 
         match expression {
@@ -54,13 +64,13 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn block_statement(&mut self, statement: &'a Statement) -> LoxResult<()> {
+    fn block_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::Block(body) = statement {
-            self.begin_scope()?;
+            self.begin_scope();
             for statement in body.as_ref() {
                 self.resolve_statement(statement.as_ref())?;
             }
-            self.end_scope()?;
+            self.end_scope();
 
             Ok(())
         } else {
@@ -68,7 +78,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn var_statement(&mut self, statement: &'a Statement) -> LoxResult<()> {
+    fn var_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         use Statement::{AwaitVar, Var};
 
         macro_rules! define_and_exit {
@@ -98,8 +108,7 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    fn variable_expression(&mut self, expression: &'a Expression) -> LoxResult<()> {
-        // Some(Expression::Variable(name))
+    fn variable_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Variable(name) = expression {
             if let Some(scope) = self.scopes.last() {
                 if scope.get(&name.to_string()) == Some(&false) {
@@ -116,7 +125,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn assignment_expression(&mut self, expression: &'a Expression) -> LoxResult<()> {
+    fn assignment_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Assign(name, value) = expression {
             self.resolve_expression(value)?;
             self.resolve_local(expression, name)?;
@@ -126,7 +135,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn function_statement(&mut self, statement: &'a Statement) -> LoxResult<()> {
+    fn function_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::Function(name, ..) = statement {
             self.declare(name);
             self.define(name);
@@ -138,9 +147,9 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_function(&mut self, function: &'a Statement) -> LoxResult<()> {
+    fn resolve_function(&mut self, function: &Statement) -> LoxResult<()> {
         if let Statement::Function(_, params, body) = function {
-            self.begin_scope()?;
+            self.begin_scope();
 
             for i in params {
                 self.declare(i);
@@ -148,13 +157,15 @@ impl<'a> Resolver<'a> {
             }
 
             self.resolve_statement(body)?;
-            self.end_scope()
+            self.end_scope();
+
+            Ok(())
         } else {
             unreachable!()
         }
     }
 
-    fn expression_statement(&mut self, statement: &'a Statement) -> LoxResult<()> {
+    fn expression_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::StmtExpression(expr) = statement {
             self.resolve_expression(expr)?;
             Ok(())
@@ -163,7 +174,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn print_statement(&mut self, statement: &'a Statement) -> LoxResult<()> {
+    fn print_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::Print(expr) = statement {
             self.resolve_expression(expr)?;
             Ok(())
@@ -172,7 +183,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn if_statement(&mut self, statement: &'a Statement) -> LoxResult<()> {
+    fn if_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::If(condition, then_branch, else_branch) = statement {
             self.resolve_expression(condition)?;
             self.resolve_statement(then_branch)?;
@@ -187,7 +198,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn return_statement(&mut self, statement: &'a Statement) -> LoxResult<()> {
+    fn return_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::Return(Some(expr)) = statement {
             self.resolve_expression(expr)
         } else {
@@ -195,7 +206,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn while_statement(&mut self, statement: &'a Statement) -> LoxResult<()> {
+    fn while_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::While(condition, body) = statement {
             self.resolve_expression(condition)?;
             self.resolve_statement(body)?;
@@ -206,7 +217,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn binary_expression(&mut self, expression: &'a Expression) -> LoxResult<()> {
+    fn binary_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Binary(left, _, right) = expression {
             self.resolve_expression(left)?;
             self.resolve_expression(right)?;
@@ -217,7 +228,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn call_expression(&mut self, expression: &'a Expression) -> LoxResult<()> {
+    fn call_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Call(callee, _, arguments) = expression {
             self.resolve_expression(callee)?;
 
@@ -231,7 +242,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn grouping_expression(&mut self, expression: &'a Expression) -> LoxResult<()> {
+    fn grouping_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Grouping(inner) = expression {
             self.resolve_expression(inner)
         } else {
@@ -239,7 +250,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn logical_expression(&mut self, expression: &'a Expression) -> LoxResult<()> {
+    fn logical_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Logical(left, _, right) = expression {
             self.resolve_expression(left)?;
             self.resolve_expression(right)?;
@@ -250,7 +261,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn unary_expression(&mut self, expression: &'a Expression) -> LoxResult<()> {
+    fn unary_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Unary(_, right) = expression {
             self.resolve_expression(right)
         } else {
@@ -258,9 +269,9 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn lambda_expression(&mut self, expression: &'a Expression) -> LoxResult<()> {
+    fn lambda_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Lambda(params, body) = expression {
-            self.begin_scope()?;
+            self.begin_scope();
 
             for i in params {
                 self.declare(i);
@@ -268,20 +279,22 @@ impl<'a> Resolver<'a> {
             }
 
             self.resolve_statement(body)?;
-            self.end_scope()
+            self.end_scope();
+
+            Ok(())
         } else {
             unreachable!()
         }
     }
 
-    fn resolve_local(&mut self, expression: &'a Expression, name: &Token) -> LoxResult<()> {
-        if let Some((index, _)) = self
-            .scopes
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(_, scope)| scope.contains_key(&name.to_string()))
-        {
+    fn resolve_local(&self, expression: &Expression, name: &Token) -> LoxResult<()> {
+        if let Some((index, _)) = self.scopes.iter().enumerate().rev().find(|(_, scope)| {
+            scope.contains_key(if let TokenType::Identifier(str) = &name.kind {
+                str
+            } else {
+                unreachable!()
+            })
+        }) {
             self.executor
                 .resolve(expression, self.scopes.len() - 1 - index);
         }
@@ -289,14 +302,12 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    fn begin_scope(&mut self) -> LoxResult<()> {
+    fn begin_scope(&mut self) {
         self.scopes.push(AHashMap::new());
-        Ok(())
     }
 
-    fn end_scope(&mut self) -> LoxResult<()> {
+    fn end_scope(&mut self) {
         self.scopes.pop();
-        Ok(())
     }
 
     fn declare(&mut self, name: &Token) {
