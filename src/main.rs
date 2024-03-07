@@ -47,8 +47,9 @@ async fn main() {
             let path = &args.next().unwrap();
             if let Ok(source_code) = fs::read_to_string(path) {
                 let exe = Executor::new(&WORKERS, standard::globals());
+                let mut resolver = Resolver::new(&exe);
 
-                if let Err(e) = run(&source_code, &exe) {
+                if let Err(e) = run(&source_code, &mut resolver) {
                     println!("{e}");
                     process::exit(65)
                 }
@@ -65,6 +66,7 @@ async fn main() {
 
 async fn run_prompt() {
     let exe = Executor::new(&WORKERS, standard::globals());
+    let mut resolver = Resolver::new(&exe);
 
     let mut rl = rustyline::DefaultEditor::new().unwrap();
     loop {
@@ -76,7 +78,7 @@ async fn run_prompt() {
                     break;
                 };
 
-                if let Err(e) = run(&input, &exe) {
+                if let Err(e) = run(&input, &mut resolver) {
                     println!("{e}\n");
                 };
             }
@@ -85,15 +87,15 @@ async fn run_prompt() {
     }
 }
 
-fn run(code: &str, exe: &Executor) -> LoxResult<()> {
+fn run(code: &str, resolver: &mut Resolver) -> LoxResult<()> {
     let stmt = {
         let tokens = Scanner::new(code).scan_tokens()?;
         Parser::new(&tokens).parse()?
     };
 
-    Resolver::new(exe).resolve(Arc::clone(&stmt))?;
+    resolver.resolve(Arc::clone(&stmt))?;
 
-    exe.execute(Arc::clone(&stmt))?;
+    resolver.executor.execute(Arc::clone(&stmt))?;
 
     Ok(())
 }

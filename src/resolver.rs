@@ -9,25 +9,26 @@ use crate::{
 };
 
 pub struct Resolver<'a> {
-    executor: &'a Executor,
+    pub executor: &'a Executor,
     scopes: Vec<AHashMap<String, bool>>,
 }
 
 impl<'a> Resolver<'a> {
     pub fn new(executor: &'a Executor) -> Self {
-        Self {
+        let mut result = Self {
             executor,
             scopes: vec![],
-        }
-    }
-    pub fn resolve(&mut self, statements: Arc<Vec<Arc<Statement>>>) -> LoxResult<()> {
-        self.begin_scope();
+        };
 
+        result.begin_scope();
+
+        result
+    }
+
+    pub fn resolve(&mut self, statements: Arc<Vec<Arc<Statement>>>) -> LoxResult<()> {
         for statement in statements.iter() {
             self.resolve_statement(statement)?;
         }
-
-        self.end_scope();
 
         Ok(())
     }
@@ -328,5 +329,11 @@ impl<'a> Resolver<'a> {
                 unreachable!()
             }
         }
+    }
+}
+
+impl Drop for Resolver<'_> {
+    fn drop(&mut self) {
+        self.end_scope()
     }
 }
