@@ -1,0 +1,5 @@
+fun multiply(x) {
+    return lambda(y) { return x * y; };
+}
+
+print multiply(333)(2);
