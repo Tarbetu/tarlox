@@ -272,15 +272,12 @@ impl<'a> Resolver<'a> {
 
     fn lambda_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Lambda(params, body) = expression {
-            self.begin_scope();
-
             for i in params {
                 self.declare(i);
                 self.define(i);
             }
 
             self.resolve_statement(body)?;
-            self.end_scope();
 
             Ok(())
         } else {

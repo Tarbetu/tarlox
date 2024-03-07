@@ -343,10 +343,9 @@ impl Executor {
                     })
                 }
             }
-            Lambda(params, body) => Ok(LoxObject::from(LoxCallable::lambda(
+            Lambda(params, body) => Ok(LoxObject::from(LoxCallable::new(
                 Arc::new(params.to_owned()),
                 Arc::clone(body),
-                Arc::clone(&self.environment),
             ))),
         }
     }
