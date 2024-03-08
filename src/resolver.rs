@@ -8,9 +8,16 @@ use crate::{
     LoxResult, Token, TokenType,
 };
 
+#[derive(Clone, Copy)]
+enum FunctionType {
+    None,
+    Function,
+}
+
 pub struct Resolver<'a> {
     pub executor: &'a Executor,
     scopes: Vec<AHashMap<String, bool>>,
+    current_function: FunctionType,
 }
 
 impl<'a> Resolver<'a> {
@@ -18,6 +25,7 @@ impl<'a> Resolver<'a> {
         let mut result = Self {
             executor,
             scopes: vec![],
+            current_function: FunctionType::None,
         };
 
         result.begin_scope();
@@ -84,7 +92,7 @@ impl<'a> Resolver<'a> {
 
         macro_rules! define_and_exit {
             ($name:expr, $body:block) => {
-                self.declare($name);
+                self.declare($name)?;
                 $body
                 self.define($name);
             };
@@ -138,28 +146,33 @@ impl<'a> Resolver<'a> {
 
     fn function_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::Function(name, ..) = statement {
-            self.declare(name);
+            self.declare(name)?;
             self.define(name);
 
-            self.resolve_function(statement)?;
+            self.resolve_function(statement, FunctionType::Function)?;
+
             Ok(())
         } else {
             unreachable!()
         }
     }
 
-    fn resolve_function(&mut self, function: &Statement) -> LoxResult<()> {
+    fn resolve_function(&mut self, function: &Statement, f_type: FunctionType) -> LoxResult<()> {
         if let Statement::Function(_, params, body) = function {
+            let enclosing_function = self.current_function;
+            self.current_function = f_type;
+
             self.begin_scope();
 
             for i in params {
-                self.declare(i);
+                self.declare(i)?;
                 self.define(i);
             }
 
             self.resolve_statement(body)?;
             self.end_scope();
 
+            self.current_function = enclosing_function;
             Ok(())
         } else {
             unreachable!()
@@ -201,7 +214,14 @@ impl<'a> Resolver<'a> {
 
     fn return_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::Return(Some(expr)) = statement {
-            self.resolve_expression(expr)
+            if let FunctionType::None = self.current_function {
+                Err(ParseError {
+                    line: None,
+                    msg: "Can't return from top-level code.".into(),
+                })
+            } else {
+                self.resolve_expression(expr)
+            }
         } else {
             unreachable!()
         }
@@ -273,7 +293,7 @@ impl<'a> Resolver<'a> {
     fn lambda_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Lambda(params, body) = expression {
             for i in params {
-                self.declare(i);
+                self.declare(i)?;
                 self.define(i);
             }
 
@@ -308,14 +328,23 @@ impl<'a> Resolver<'a> {
         self.scopes.pop();
     }
 
-    fn declare(&mut self, name: &Token) {
+    fn declare(&mut self, name: &Token) -> LoxResult<()> {
         if let Some(scope) = self.scopes.last_mut() {
             if let TokenType::Identifier(str) = &name.kind {
-                scope.insert(str.to_string(), false);
+                if scope.contains_key(str) {
+                    return Err(ParseError {
+                        line: Some(name.line),
+                        msg: "Already a variable with this name in this scope.".into(),
+                    });
+                } else {
+                    scope.insert(str.to_string(), false);
+                }
             } else {
                 unreachable!()
             }
         }
+
+        Ok(())
     }
 
     fn define(&mut self, name: &Token) {
