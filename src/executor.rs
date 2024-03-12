@@ -374,6 +374,19 @@ impl Executor {
 
                 object.get(name)
             }
+            Set(object, name, value) => {
+                let object = self.eval_expression(object)?;
+
+                if let LoxObject::Instance(..) = object {
+                    let value = self.eval_expression(value)?;
+                    object.set(name, value)
+                } else {
+                    Err(LoxError::RuntimeError {
+                        line: Some(name.line),
+                        msg: "Only instances have fields".into(),
+                    })
+                }
+            }
         }
     }
 }

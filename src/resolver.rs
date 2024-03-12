@@ -70,8 +70,9 @@ impl<'a> Resolver<'a> {
             Assign(..) => self.assignment_expression(expression),
             Call(..) => self.call_expression(expression),
             Lambda(..) => self.lambda_expression(expression),
+            Get(..) => self.get_expression(expression),
+            Set(..) => self.set_expression(expression),
             Literal(..) => Ok(()),
-            Get(..) => Ok(()),
         }
     }
 
@@ -278,6 +279,15 @@ impl<'a> Resolver<'a> {
 
     fn get_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Get(object, ..) = expression {
+            self.resolve_expression(&object)
+        } else {
+            unreachable!()
+        }
+    }
+
+    fn set_expression(&mut self, expression: &Expression) -> LoxResult<()> {
+        if let Expression::Set(object, _name, value) = expression {
+            self.resolve_expression(&value)?;
             self.resolve_expression(&object)
         } else {
             unreachable!()

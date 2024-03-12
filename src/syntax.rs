@@ -341,6 +341,8 @@ impl<'a> Parser<'a> {
 
             if let Expression::Variable(name) = expr {
                 return Ok(Expression::Assign(name, value.into()));
+            } else if let Expression::Get(object, name) = expr {
+                return Ok(Expression::Set(object, name, value.into()));
             } else {
                 return Err(LoxError::ParseError {
                     line: Some(self.previous().line),

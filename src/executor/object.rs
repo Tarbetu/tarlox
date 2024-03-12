@@ -1,4 +1,4 @@
-use crate::{LoxError, LoxResult, Token, NUMBER_PREC};
+use crate::{LoxError, LoxResult, Token, TokenType, NUMBER_PREC};
 
 use dashmap::DashMap;
 use rug::Float;
@@ -93,13 +93,32 @@ impl LoxObject {
     }
 
     pub fn get(&self, method: &Token) -> LoxResult<LoxObject> {
-        if let LoxObject::Instance(id, class, fields) = self {
-            unimplemented!()
+        if let (LoxObject::Instance(.., fields), TokenType::Identifier(name)) = (self, &method.kind)
+        {
+            match fields.get(name) {
+                Some(val) => Ok(LoxObject::from(val.value())),
+                None => Err(LoxError::RuntimeError {
+                    line: Some(method.line),
+                    msg: format!("Undefined property {name}."),
+                }),
+            }
         } else {
             Err(LoxError::RuntimeError {
                 line: Some(method.line),
                 msg: "Only instances have properties".into(),
             })
+        }
+    }
+
+    pub fn set(&self, method: &Token, value: LoxObject) -> LoxResult<LoxObject> {
+        if let (LoxObject::Instance(.., fields), TokenType::Identifier(name)) = (self, &method.kind)
+        {
+            fields.insert(name.to_owned(), value.clone());
+
+            Ok(value)
+        } else {
+            // Executor already checks that
+            unreachable!()
         }
     }
 }
