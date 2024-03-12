@@ -54,6 +54,7 @@ impl<'a> Resolver<'a> {
             While(..) => self.while_statement(statement),
             Return(..) => self.return_statement(statement),
             Function(..) => self.function_statement(statement),
+            Class(..) => self.class_statement(statement),
         }
     }
 
@@ -70,6 +71,7 @@ impl<'a> Resolver<'a> {
             Call(..) => self.call_expression(expression),
             Lambda(..) => self.lambda_expression(expression),
             Literal(..) => Ok(()),
+            Get(..) => Ok(()),
         }
     }
 
@@ -179,6 +181,17 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    fn class_statement(&mut self, statement: &Statement) -> LoxResult<()> {
+        if let Statement::Class(name, ..) = statement {
+            self.declare(name)?;
+            self.define(name);
+
+            Ok(())
+        } else {
+            unreachable!()
+        }
+    }
+
     fn expression_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::StmtExpression(expr) = statement {
             self.resolve_expression(expr)?;
@@ -258,6 +271,14 @@ impl<'a> Resolver<'a> {
             }
 
             Ok(())
+        } else {
+            unreachable!()
+        }
+    }
+
+    fn get_expression(&mut self, expression: &Expression) -> LoxResult<()> {
+        if let Expression::Get(object, ..) = expression {
+            self.resolve_expression(&object)
         } else {
             unreachable!()
         }

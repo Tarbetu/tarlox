@@ -8,7 +8,7 @@ use crate::{
     TokenType::Identifier,
 };
 
-use super::{object::LoxObject, Executor};
+use super::{class::LoxClass, object::LoxObject, Executor};
 
 use std::{
     hash::{Hash, Hasher},
@@ -26,6 +26,9 @@ pub enum LoxCallable {
     NativeFunction {
         arity: usize,
         fun: fn(Vec<LoxObject>) -> LoxResult<LoxObject>,
+    },
+    Class {
+        class: LoxClass,
     },
 }
 
@@ -54,6 +57,7 @@ impl LoxCallable {
         match self {
             Function { parameters, .. } => parameters.len(),
             NativeFunction { arity, .. } => *arity,
+            Class { .. } => 0,
         }
     }
 
@@ -153,22 +157,31 @@ impl LoxCallable {
                 }
             }
             NativeFunction { fun, .. } => fun(arguments),
+            Class { class } => Ok(LoxObject::Instance(
+                rand::random(),
+                Arc::new(class.clone()),
+                Arc::new(DashMap::with_hasher(ahash::RandomState::new())),
+            )),
         }
     }
 }
 
 impl From<&LoxCallable> for LoxCallable {
     fn from(callable: &LoxCallable) -> Self {
+        use LoxCallable::*;
         match callable {
-            LoxCallable::Function {
+            Function {
                 id,
                 parameters,
                 body,
                 cache: _,
             } => LoxCallable::new_with_id(Arc::clone(parameters), Arc::clone(body), *id),
-            LoxCallable::NativeFunction { arity, fun } => LoxCallable::NativeFunction {
+            NativeFunction { arity, fun } => LoxCallable::NativeFunction {
                 arity: *arity,
                 fun: *fun,
+            },
+            Class { class } => Class {
+                class: class.clone(),
             },
         }
     }
@@ -183,6 +196,7 @@ impl Hash for LoxCallable {
         match self {
             NativeFunction { fun, .. } => fun.hash(state),
             Function { id, .. } => id.hash(state),
+            Class { class } => class.name.hash(state),
         }
     }
 }

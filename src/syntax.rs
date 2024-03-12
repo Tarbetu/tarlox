@@ -42,9 +42,11 @@ impl<'a> Parser<'a> {
     }
 
     fn declaration(&mut self) -> LoxResult<Statement> {
-        use TokenType::{AwaitVar, Fun, Var};
+        use TokenType::{AwaitVar, Class, Fun, Var};
 
-        if self.is_match(&[Fun]) {
+        if self.is_match(&[Class]) {
+            self.class_declaration()
+        } else if self.is_match(&[Fun]) {
             self.function("function")
         } else if self.is_match(&[Var]) {
             self.var_declaration(Var)
@@ -53,6 +55,30 @@ impl<'a> Parser<'a> {
         } else {
             self.statement()
         }
+    }
+
+    fn class_declaration(&mut self) -> LoxResult<Statement> {
+        use TokenType::{Identifier, LeftBrace, RightBrace};
+
+        let name = self
+            .consume(Identifier(String::new()), Some("Except class name.".into()))?
+            .to_owned();
+
+        self.consume(LeftBrace, Some("Except '{' before class body.".into()))?;
+
+        let methods = {
+            let mut result = vec![];
+
+            while !self.check(&RightBrace) && self.peek().is_some() {
+                result.push(self.function("method")?);
+            }
+
+            result
+        };
+
+        self.consume(RightBrace, Some("Except '}' after class body.".into()))?;
+
+        Ok(Statement::Class(name, methods))
     }
 
     fn function(&mut self, kind: &str) -> LoxResult<Statement> {
@@ -326,6 +352,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
+    // Convert lambda to contains a function statement
     fn lambda(&mut self) -> LoxResult<Expression> {
         use TokenType::*;
 
@@ -478,11 +505,19 @@ impl<'a> Parser<'a> {
     }
 
     fn call(&mut self) -> LoxResult<Expression> {
+        use TokenType::*;
+
         let mut expr = self.primary()?;
 
         loop {
-            if self.is_match(&[TokenType::LeftParen]) {
+            if self.is_match(&[LeftParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.is_match(&[Dot]) {
+                let name = self.consume(
+                    Identifier(String::new()),
+                    Some("Expect property name after '.'".into()),
+                )?;
+                expr = Expression::Get(expr.into(), name.to_owned())
             } else {
                 break;
             }

@@ -1,16 +1,22 @@
-use crate::{LoxError, LoxResult, NUMBER_PREC};
+use crate::{LoxError, LoxResult, Token, NUMBER_PREC};
 
+use dashmap::DashMap;
 use rug::Float;
 use std::sync::Arc;
 
 use std::ops;
 
+use super::class::LoxClass;
 use super::LoxCallable;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum LoxObject {
     Nil,
-    // Class(AHashMap<String, LoxObject>),
+    Instance(
+        u64,
+        Arc<LoxClass>,
+        Arc<DashMap<String, LoxObject, ahash::RandomState>>,
+    ),
     Number(Arc<Float>),
     LoxString(Arc<String>),
     Boolean(bool),
@@ -84,6 +90,33 @@ impl LoxObject {
         Ok(Self::from(
             bool::from(&self.is_less(rhs)?) || bool::from(&self.is_equal(rhs)),
         ))
+    }
+
+    pub fn get(&self, method: &Token) -> LoxResult<LoxObject> {
+        if let LoxObject::Instance(id, class, fields) = self {
+            unimplemented!()
+        } else {
+            Err(LoxError::RuntimeError {
+                line: Some(method.line),
+                msg: "Only instances have properties".into(),
+            })
+        }
+    }
+}
+
+impl PartialEq for LoxObject {
+    fn eq(&self, other: &Self) -> bool {
+        use LoxObject::*;
+
+        match (self, other) {
+            (Nil, Nil) => true,
+            (Instance(id, ..), Instance(other_id, ..)) => id == other_id,
+            (Number(num), Number(other_num)) => num == other_num,
+            (LoxString(str), LoxString(other_str)) => str == other_str,
+            (Boolean(bool), Boolean(other_bool)) => bool == other_bool,
+            (Callable(callable), Callable(other_callable)) => callable == other_callable,
+            _ => false,
+        }
     }
 }
 
@@ -208,7 +241,14 @@ impl ToString for LoxObject {
                 }
             }
             Boolean(b) => b.to_string(),
-            Callable(callable) => format!("<fun arity: {}>", callable.arity()),
+            Callable(callable) => {
+                if let LoxCallable::Class { class } = callable.as_ref() {
+                    format!("#<class {}>", class)
+                } else {
+                    format!("<fun arity: {}>", callable.arity())
+                }
+            }
+            Instance(id, class, ..) => format!("#<{} instance as {}>", class.name, id),
         }
     }
 }
@@ -229,6 +269,7 @@ impl From<&LoxObject> for LoxObject {
             Boolean(bool) => Boolean(*bool),
             Nil => Nil,
             Callable(callable) => Callable(Arc::clone(callable)),
+            Instance(id, class, fields, ..) => Instance(*id, Arc::clone(class), Arc::clone(fields)),
         }
     }
 }

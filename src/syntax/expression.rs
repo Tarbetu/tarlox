@@ -17,6 +17,7 @@ pub enum Expression {
     Assign(Token, Box<Expression>),
     Call(Box<Expression>, Token, Vec<Expression>),
     Lambda(Vec<Token>, Arc<Statement>),
+    Get(Box<Expression>, Token),
 }
 
 impl Display for Expression {
@@ -50,6 +51,9 @@ impl Display for Expression {
             }
             Lambda(params, _body) => {
                 write!(f, "<lambda arity: {}>", params.len())
+            }
+            Get(object, name) => {
+                write!(f, "({object} {name})")
             }
         }
     }

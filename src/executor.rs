@@ -1,4 +1,5 @@
 pub mod callable;
+pub mod class;
 pub mod environment;
 pub mod object;
 
@@ -8,6 +9,7 @@ use either::Either::{self, Left, Right};
 use threadpool::ThreadPool;
 
 pub use crate::executor::callable::LoxCallable;
+use crate::executor::class::LoxClass;
 use crate::WORKERS;
 pub use object::LoxObject;
 
@@ -168,6 +170,25 @@ impl Executor {
                 Arc::clone(&self.environment),
                 maybe_expr.as_ref().map(Arc::clone),
             )),
+            Class(name, _methods) => {
+                if let TokenType::Identifier(name) = &name.kind {
+                    environment::put_immediately(
+                        Arc::clone(&self.environment),
+                        Arc::clone(&self.locals),
+                        name,
+                        Right(LoxObject::from(LoxCallable::Class {
+                            class: LoxClass::new(name.to_string()),
+                        })),
+                    );
+
+                    Ok(())
+                } else {
+                    Err(LoxError::ParseError {
+                        line: Some(name.line),
+                        msg: String::from("Invalid name specified in function statement!"),
+                    })
+                }
+            }
         }
     }
 
@@ -347,6 +368,12 @@ impl Executor {
                 Arc::new(params.to_owned()),
                 Arc::clone(body),
             ))),
+
+            Get(object, name) => {
+                let object = self.eval_expression(object)?;
+
+                object.get(name)
+            }
         }
     }
 }
