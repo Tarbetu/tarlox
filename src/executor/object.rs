@@ -195,9 +195,8 @@ impl ops::Add<LoxObject> for LoxObject {
     fn add(self, rhs: LoxObject) -> Self::Output {
         use LoxObject::{LoxString, Number};
 
-        dbg!(&self, &rhs);
-        if let (LoxString(l), LoxString(r)) = (&self, &rhs) {
-            Ok(LoxObject::from(format!("{l}{r}").as_str()))
+        if let (LoxString(l), r) = (&self, &rhs) {
+            Ok(LoxObject::from(format!("{}{}", l, r.to_string()).as_str()))
         } else if let (Number(l), Number(r)) = (self, rhs) {
             Ok(LoxObject::from(Float::with_val(NUMBER_PREC, &*l + &*r)))
         } else {
