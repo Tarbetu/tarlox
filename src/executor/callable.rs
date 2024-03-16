@@ -21,7 +21,7 @@ pub enum LoxCallable {
         id: u64,
         parameters: Arc<Vec<Token>>,
         body: Arc<Statement>,
-        cache: DashMap<Vec<String>, LoxObject, ahash::RandomState>,
+        cache: Option<DashMap<Vec<String>, LoxObject, ahash::RandomState>>,
     },
     NativeFunction {
         arity: usize,
@@ -33,21 +33,34 @@ pub enum LoxCallable {
 }
 
 impl LoxCallable {
-    pub fn new(parameters: Arc<Vec<Token>>, body: Arc<Statement>) -> Self {
+    pub fn new(parameters: Arc<Vec<Token>>, body: Arc<Statement>, will_cache: bool) -> Self {
         Self::Function {
             id: rand::random(),
             parameters,
             body,
-            cache: DashMap::with_hasher(ahash::RandomState::new()),
+            cache: if will_cache {
+                Some(DashMap::with_hasher(ahash::RandomState::new()))
+            } else {
+                None
+            },
         }
     }
 
-    pub fn new_with_id(parameters: Arc<Vec<Token>>, body: Arc<Statement>, id: u64) -> Self {
+    pub fn new_with_id(
+        parameters: Arc<Vec<Token>>,
+        body: Arc<Statement>,
+        id: u64,
+        will_cache: bool,
+    ) -> Self {
         Self::Function {
             id,
             parameters,
             body,
-            cache: DashMap::with_hasher(ahash::RandomState::new()),
+            cache: if will_cache {
+                Some(DashMap::with_hasher(ahash::RandomState::new()))
+            } else {
+                None
+            },
         }
     }
 
@@ -79,12 +92,14 @@ impl LoxCallable {
                 ..
             } => {
                 loop {
-                    if self.arity() != 0 {
-                        let cache_key: Vec<String> =
-                            arguments.iter().map(|i| i.to_string()).collect();
-                        if let Some(early) = cache.get(&cache_key) {
-                            return Ok(LoxObject::from(early.value()));
-                        };
+                    if let Some(cache) = cache {
+                        if self.arity() != 0 {
+                            let cache_key: Vec<String> =
+                                arguments.iter().map(|i| i.to_string()).collect();
+                            if let Some(early) = cache.get(&cache_key) {
+                                return Ok(LoxObject::from(early.value()));
+                            };
+                        }
                     }
 
                     for (index, param) in parameters.iter().enumerate() {
@@ -141,10 +156,12 @@ impl LoxCallable {
                                 };
 
                                 if self.arity() != 0 {
-                                    cache.insert(
-                                        arguments.iter().map(|i| i.to_string()).collect(),
-                                        LoxObject::from(&val),
-                                    );
+                                    cache.as_ref().and_then(|cache| {
+                                        cache.insert(
+                                            arguments.iter().map(|i| i.to_string()).collect(),
+                                            LoxObject::from(&val),
+                                        )
+                                    });
                                 }
 
                                 Ok(val)
@@ -174,8 +191,13 @@ impl From<&LoxCallable> for LoxCallable {
                 id,
                 parameters,
                 body,
-                cache: _,
-            } => LoxCallable::new_with_id(Arc::clone(parameters), Arc::clone(body), *id),
+                cache,
+            } => LoxCallable::new_with_id(
+                Arc::clone(parameters),
+                Arc::clone(body),
+                *id,
+                cache.is_some(),
+            ),
             NativeFunction { arity, fun } => LoxCallable::NativeFunction {
                 arity: *arity,
                 fun: *fun,

@@ -161,7 +161,7 @@ impl Executor {
             }
             Function(name, params, body) => {
                 if let TokenType::Identifier(name) = &name.kind {
-                    let fun = LoxCallable::new(Arc::new(params.to_owned()), Arc::clone(body));
+                    let fun = LoxCallable::new(Arc::new(params.to_owned()), Arc::clone(body), true);
                     environment::put_immediately(
                         Arc::clone(&self.environment),
                         Arc::clone(&self.locals),
@@ -198,7 +198,11 @@ impl Executor {
                                 result.insert(
                                     method_name.to_owned(),
                                     // Param should be an integer
-                                    LoxCallable::new(Arc::new(params.to_owned()), Arc::clone(body)),
+                                    LoxCallable::new(
+                                        Arc::new(params.to_owned()),
+                                        Arc::clone(body),
+                                        false,
+                                    ),
                                 );
                             } else {
                                 unreachable!()
@@ -403,6 +407,7 @@ impl Executor {
             Lambda(params, body) => Ok(LoxObject::from(LoxCallable::new(
                 Arc::new(params.to_owned()),
                 Arc::clone(body),
+                true,
             ))),
 
             Get(object, name) => {
