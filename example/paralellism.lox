@@ -12,6 +12,6 @@ fun factorial(x) {
 print clock();
 var x = factorial(666);
 var y = factorial(1300);
-print("x " + x);
-print("y " + y);
+print("factorial(666) = " + x);
+print("factorial(1300) = " + y);
 print clock();
