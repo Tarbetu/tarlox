@@ -1,0 +1,23 @@
+class Human {
+    speak() {
+        print "Hi! I'm a human";
+    }
+
+    fly() {
+        print "goes to the airport";
+    }
+}
+
+// class Tarbetu < Human {
+//     speak() {
+//         print "I'm above the human!"
+//     }
+// }
+
+var random_person = Human();
+random_person.speak();
+random_person.fly();
+
+// var tarbetu = Tarbetu();
+// tarbetu.speak();
+// tarbetu.fly();

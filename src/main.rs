@@ -8,6 +8,7 @@ mod syntax;
 pub use crate::errors::LoxError;
 pub use crate::errors::LoxResult;
 pub use crate::scanner::{Token, TokenType};
+use executor::Environment;
 use executor::Executor;
 use resolver::Resolver;
 use scanner::Scanner;
@@ -30,6 +31,7 @@ lazy_static! {
             .unwrap_or(NonZeroUsize::new(1).unwrap())
             .into()
     );
+    static ref GLOBALS: Arc<Environment> = standard::globals();
 }
 
 #[tokio::main]
@@ -46,7 +48,7 @@ async fn main() {
             let _ = &args.next();
             let path = &args.next().unwrap();
             if let Ok(source_code) = fs::read_to_string(path) {
-                let exe = Executor::new(&WORKERS, standard::globals());
+                let exe = Executor::new(&WORKERS);
                 let mut resolver = Resolver::new(&exe);
 
                 if let Err(e) = run(&source_code, &mut resolver) {
@@ -65,7 +67,7 @@ async fn main() {
 }
 
 async fn run_prompt() {
-    let exe = Executor::new(&WORKERS, standard::globals());
+    let exe = Executor::new(&WORKERS);
     let mut resolver = Resolver::new(&exe);
 
     let mut rl = rustyline::DefaultEditor::new().unwrap();

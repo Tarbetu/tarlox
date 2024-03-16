@@ -93,11 +93,13 @@ impl LoxObject {
     }
 
     pub fn get(&self, method: &Token) -> LoxResult<LoxObject> {
-        if let (LoxObject::Instance(.., fields), TokenType::Identifier(name)) = (self, &method.kind)
+        if let (LoxObject::Instance(.., class, fields), TokenType::Identifier(name)) =
+            (self, &method.kind)
         {
-            match fields.get(name) {
-                Some(val) => Ok(LoxObject::from(val.value())),
-                None => Err(LoxError::RuntimeError {
+            match (fields.get(name), class.find_method(name)) {
+                (Some(val), ..) => Ok(LoxObject::from(val.value())),
+                (None, Some(callable)) => Ok(LoxObject::from(callable)),
+                (None, None) => Err(LoxError::RuntimeError {
                     line: Some(method.line),
                     msg: format!("Undefined property {name}."),
                 }),
@@ -193,6 +195,7 @@ impl ops::Add<LoxObject> for LoxObject {
     fn add(self, rhs: LoxObject) -> Self::Output {
         use LoxObject::{LoxString, Number};
 
+        dbg!(&self, &rhs);
         if let (LoxString(l), LoxString(r)) = (&self, &rhs) {
             Ok(LoxObject::from(format!("{l}{r}").as_str()))
         } else if let (Number(l), Number(r)) = (self, rhs) {
@@ -240,6 +243,12 @@ impl From<&Float> for LoxObject {
 impl From<LoxCallable> for LoxObject {
     fn from(value: LoxCallable) -> Self {
         Self::Callable(Arc::new(value))
+    }
+}
+
+impl From<&LoxCallable> for LoxObject {
+    fn from(value: &LoxCallable) -> Self {
+        Self::Callable(Arc::new(LoxCallable::from(value)))
     }
 }
 

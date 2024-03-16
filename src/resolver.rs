@@ -12,6 +12,7 @@ use crate::{
 enum FunctionType {
     None,
     Function,
+    Method,
 }
 
 pub struct Resolver<'a> {
@@ -183,9 +184,14 @@ impl<'a> Resolver<'a> {
     }
 
     fn class_statement(&mut self, statement: &Statement) -> LoxResult<()> {
-        if let Statement::Class(name, ..) = statement {
+        if let Statement::Class(name, methods) = statement {
             self.declare(name)?;
             self.define(name);
+
+            for method in methods {
+                let declaration = FunctionType::Method;
+                self.resolve_function(method, declaration)?
+            }
 
             Ok(())
         } else {

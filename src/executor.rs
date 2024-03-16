@@ -3,6 +3,7 @@ pub mod class;
 pub mod environment;
 pub mod object;
 
+use ahash::AHashMap;
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
 use either::Either::{self, Left, Right};
@@ -10,6 +11,8 @@ use threadpool::ThreadPool;
 
 pub use crate::executor::callable::LoxCallable;
 use crate::executor::class::LoxClass;
+use crate::Token;
+use crate::GLOBALS;
 use crate::WORKERS;
 pub use object::LoxObject;
 
@@ -36,9 +39,9 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub fn new(workers: &'static ThreadPool, environment: Arc<Environment>) -> Executor {
+    pub fn new(workers: &'static ThreadPool) -> Executor {
         Self {
-            environment,
+            environment: Arc::new(Environment::default()),
             workers,
             locals: Arc::new(DashMap::with_hasher(ahash::RandomState::new())),
         }
@@ -53,9 +56,16 @@ impl Executor {
         key: &u64,
         expr: &Expression,
     ) -> Option<Ref<'_, u64, PackagedObject, ahash::RandomState>> {
-        self.locals
+        let value = self
+            .locals
             .get(&expr.to_string())
-            .map(|distance| self.environment.get_at(*distance, key).unwrap())
+            .map(|distance| self.environment.get_at(*distance, key).unwrap());
+
+        if value.is_some() {
+            value
+        } else {
+            GLOBALS.get(key)
+        }
     }
 
     pub fn execute(&self, statements: Arc<Vec<Arc<Statement>>>) -> LoxResult<()> {
@@ -170,14 +180,40 @@ impl Executor {
                 Arc::clone(&self.environment),
                 maybe_expr.as_ref().map(Arc::clone),
             )),
-            Class(name, _methods) => {
+            Class(name, methods) => {
                 if let TokenType::Identifier(name) = &name.kind {
+                    let methods = {
+                        let mut result = AHashMap::new();
+
+                        for method in methods {
+                            if let Statement::Function(
+                                Token {
+                                    line: _,
+                                    kind: TokenType::Identifier(method_name),
+                                },
+                                params,
+                                body,
+                            ) = method
+                            {
+                                result.insert(
+                                    method_name.to_owned(),
+                                    // Param should be an integer
+                                    LoxCallable::new(Arc::new(params.to_owned()), Arc::clone(body)),
+                                );
+                            } else {
+                                unreachable!()
+                            }
+                        }
+
+                        result
+                    };
+
                     environment::put_immediately(
                         Arc::clone(&self.environment),
                         Arc::clone(&self.locals),
                         name,
                         Right(LoxObject::from(LoxCallable::Class {
-                            class: LoxClass::new(name.to_string()),
+                            class: Arc::new(LoxClass::new(name.to_string(), methods)),
                         })),
                     );
 

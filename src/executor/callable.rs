@@ -28,7 +28,7 @@ pub enum LoxCallable {
         fun: fn(Vec<LoxObject>) -> LoxResult<LoxObject>,
     },
     Class {
-        class: LoxClass,
+        class: Arc<LoxClass>,
     },
 }
 
@@ -159,7 +159,7 @@ impl LoxCallable {
             NativeFunction { fun, .. } => fun(arguments),
             Class { class } => Ok(LoxObject::Instance(
                 rand::random(),
-                Arc::new(class.clone()),
+                Arc::clone(class),
                 Arc::new(DashMap::with_hasher(ahash::RandomState::new())),
             )),
         }
@@ -181,7 +181,7 @@ impl From<&LoxCallable> for LoxCallable {
                 fun: *fun,
             },
             Class { class } => Class {
-                class: class.clone(),
+                class: Arc::clone(class),
             },
         }
     }
