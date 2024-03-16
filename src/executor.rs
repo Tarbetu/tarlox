@@ -409,7 +409,6 @@ impl Executor {
                 Arc::clone(body),
                 true,
             ))),
-
             Get(object, name) => {
                 let object = self.eval_expression(object)?;
 
@@ -428,6 +427,7 @@ impl Executor {
                     })
                 }
             }
+            This(..) => unimplemented!(),
         }
     }
 }

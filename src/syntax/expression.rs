@@ -19,6 +19,7 @@ pub enum Expression {
     Lambda(Vec<Token>, Arc<Statement>),
     Get(Box<Expression>, Token),
     Set(Box<Expression>, Token, Box<Expression>),
+    This(Token),
 }
 
 impl Display for Expression {
@@ -58,6 +59,9 @@ impl Display for Expression {
             }
             Set(object, name, value) => {
                 write!(f, "(assign {object}.{name} {value})")
+            }
+            This(..) => {
+                write!(f, "(this)")
             }
         }
     }

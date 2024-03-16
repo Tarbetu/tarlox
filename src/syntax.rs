@@ -578,6 +578,9 @@ impl<'a> Parser<'a> {
             };
             return Ok(Expression::Literal(LoxLiteral::LoxString(str)));
         }
+        if self.is_match(&[This]) {
+            return Ok(Expression::This(self.previous().to_owned()));
+        }
         if self.is_match(&[Identifier(String::new())]) {
             return Ok(Expression::Variable(self.previous().to_owned()));
         }

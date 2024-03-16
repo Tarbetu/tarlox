@@ -73,6 +73,7 @@ impl<'a> Resolver<'a> {
             Lambda(..) => self.lambda_expression(expression),
             Get(..) => self.get_expression(expression),
             Set(..) => self.set_expression(expression),
+            This(..) => self.this_expression(expression),
             Literal(..) => Ok(()),
         }
     }
@@ -188,11 +189,17 @@ impl<'a> Resolver<'a> {
             self.declare(name)?;
             self.define(name);
 
+            self.begin_scope();
+            self.scopes
+                .last_mut()
+                .and_then(|scope| scope.insert("this".into(), true));
+
             for method in methods {
                 let declaration = FunctionType::Method;
                 self.resolve_function(method, declaration)?
             }
 
+            self.end_scope();
             Ok(())
         } else {
             unreachable!()
@@ -295,6 +302,14 @@ impl<'a> Resolver<'a> {
         if let Expression::Set(object, _name, value) = expression {
             self.resolve_expression(&value)?;
             self.resolve_expression(&object)
+        } else {
+            unreachable!()
+        }
+    }
+
+    fn this_expression(&mut self, expression: &Expression) -> LoxResult<()> {
+        if let Expression::This(keyword) = expression {
+            self.resolve_local(expression, keyword)
         } else {
             unreachable!()
         }
