@@ -1,5 +1,7 @@
 use dashmap::DashMap;
 use either::Either;
+use environment::Environment;
+use lazy_static::lazy_static;
 
 use crate::{
     executor::environment::{self},
@@ -15,6 +17,10 @@ use std::{
     sync::Arc,
 };
 
+lazy_static! {
+    pub static ref THIS_KEY: u64 = environment::env_hash("THIS");
+}
+
 #[derive(Debug)]
 pub enum LoxCallable {
     Function {
@@ -22,6 +28,7 @@ pub enum LoxCallable {
         parameters: Arc<Vec<Token>>,
         body: Arc<Statement>,
         cache: Option<DashMap<Vec<String>, LoxObject, ahash::RandomState>>,
+        this: Option<LoxObject>,
     },
     NativeFunction {
         arity: usize,
@@ -33,16 +40,13 @@ pub enum LoxCallable {
 }
 
 impl LoxCallable {
-    pub fn new(parameters: Arc<Vec<Token>>, body: Arc<Statement>, will_cache: bool) -> Self {
+    pub fn new(parameters: Arc<Vec<Token>>, body: Arc<Statement>) -> Self {
         Self::Function {
             id: rand::random(),
             parameters,
             body,
-            cache: if will_cache {
-                Some(DashMap::with_hasher(ahash::RandomState::new()))
-            } else {
-                None
-            },
+            cache: Some(DashMap::with_hasher(ahash::RandomState::new())),
+            this: None,
         }
     }
 
@@ -50,17 +54,41 @@ impl LoxCallable {
         parameters: Arc<Vec<Token>>,
         body: Arc<Statement>,
         id: u64,
-        will_cache: bool,
+        this: Option<LoxObject>,
     ) -> Self {
         Self::Function {
             id,
             parameters,
             body,
-            cache: if will_cache {
-                Some(DashMap::with_hasher(ahash::RandomState::new()))
-            } else {
-                None
-            },
+            cache: Some(DashMap::with_hasher(ahash::RandomState::new())),
+            this,
+        }
+    }
+
+    pub fn new_method(parameters: Arc<Vec<Token>>, body: Arc<Statement>) -> Self {
+        Self::Function {
+            id: rand::random(),
+            parameters,
+            body,
+            cache: None,
+            this: None,
+        }
+    }
+
+    pub fn bind(&self, this: &LoxObject) -> Self {
+        if let LoxCallable::Function {
+            parameters, body, ..
+        } = self
+        {
+            LoxCallable::Function {
+                id: rand::random(),
+                parameters: Arc::clone(parameters),
+                body: Arc::clone(body),
+                cache: None,
+                this: Some(LoxObject::from(this)),
+            }
+        } else {
+            unreachable!()
         }
     }
 
@@ -89,8 +117,30 @@ impl LoxCallable {
                 parameters,
                 body,
                 cache,
+                this,
                 ..
             } => {
+                let executor = if let Some(obj) = this.as_ref() {
+                    let environment = {
+                        let env = Environment::new_with_parent(Arc::clone(&executor.environment));
+
+                        env.values.insert(
+                            *THIS_KEY,
+                            environment::PackagedObject::Ready(Ok(LoxObject::from(obj))),
+                        );
+
+                        Arc::new(env)
+                    };
+
+                    Executor {
+                        environment,
+                        workers: executor.workers,
+                        locals: Arc::clone(&executor.locals),
+                    }
+                } else {
+                    executor.clone()
+                };
+
                 loop {
                     if let Some(cache) = cache {
                         if self.arity() != 0 {
@@ -191,12 +241,13 @@ impl From<&LoxCallable> for LoxCallable {
                 id,
                 parameters,
                 body,
-                cache,
+                cache: _,
+                this,
             } => LoxCallable::new_with_id(
                 Arc::clone(parameters),
                 Arc::clone(body),
                 *id,
-                cache.is_some(),
+                this.as_ref().map(LoxObject::from),
             ),
             NativeFunction { arity, fun } => LoxCallable::NativeFunction {
                 arity: *arity,

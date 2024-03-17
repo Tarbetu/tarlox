@@ -161,7 +161,7 @@ impl Executor {
             }
             Function(name, params, body) => {
                 if let TokenType::Identifier(name) = &name.kind {
-                    let fun = LoxCallable::new(Arc::new(params.to_owned()), Arc::clone(body), true);
+                    let fun = LoxCallable::new(Arc::new(params.to_owned()), Arc::clone(body));
                     environment::put_immediately(
                         Arc::clone(&self.environment),
                         Arc::clone(&self.locals),
@@ -198,10 +198,9 @@ impl Executor {
                                 result.insert(
                                     method_name.to_owned(),
                                     // Param should be an integer
-                                    LoxCallable::new(
+                                    LoxCallable::new_method(
                                         Arc::new(params.to_owned()),
                                         Arc::clone(body),
-                                        false,
                                     ),
                                 );
                             } else {
@@ -407,7 +406,6 @@ impl Executor {
             Lambda(params, body) => Ok(LoxObject::from(LoxCallable::new(
                 Arc::new(params.to_owned()),
                 Arc::clone(body),
-                true,
             ))),
             Get(object, name) => {
                 let object = self.eval_expression(object)?;
@@ -427,7 +425,19 @@ impl Executor {
                     })
                 }
             }
-            This(..) => unimplemented!(),
+            This(name) => {
+                if let Some(pair) = self.lookup_variable(&callable::THIS_KEY, expr) {
+                    match pair.wait_for_value() {
+                        Ok(val) => Ok(LoxObject::from(val)),
+                        Err(e) => Err(e.into()),
+                    }
+                } else {
+                    Err(LoxError::InternalError(format!(
+                        "Unexcepted this at line {}",
+                        name.line
+                    )))
+                }
+            }
         }
     }
 }

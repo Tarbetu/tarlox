@@ -226,12 +226,14 @@ impl<'a> Resolver<'a> {
 
     fn if_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::If(condition, then_branch, else_branch) = statement {
+            self.begin_scope();
             self.resolve_expression(condition)?;
             self.resolve_statement(then_branch)?;
 
             if let Some(branch) = else_branch {
                 self.resolve_statement(branch)?;
             }
+            self.end_scope();
 
             Ok(())
         } else {
@@ -292,7 +294,7 @@ impl<'a> Resolver<'a> {
 
     fn get_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Get(object, ..) = expression {
-            self.resolve_expression(&object)
+            self.resolve_expression(object)
         } else {
             unreachable!()
         }
@@ -300,8 +302,8 @@ impl<'a> Resolver<'a> {
 
     fn set_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Set(object, _name, value) = expression {
-            self.resolve_expression(&value)?;
-            self.resolve_expression(&object)
+            self.resolve_expression(value)?;
+            self.resolve_expression(object)
         } else {
             unreachable!()
         }
@@ -360,7 +362,9 @@ impl<'a> Resolver<'a> {
     fn resolve_local(&self, expression: &Expression, name: &Token) -> LoxResult<()> {
         if let Some((index, _)) = self.scopes.iter().enumerate().rev().find(|(_, scope)| {
             scope.contains_key(if let TokenType::Identifier(str) = &name.kind {
-                str
+                str.as_str()
+            } else if let TokenType::This = &name.kind {
+                "this"
             } else {
                 unreachable!()
             })

@@ -98,7 +98,7 @@ impl LoxObject {
         {
             match (fields.get(name), class.find_method(name)) {
                 (Some(val), ..) => Ok(LoxObject::from(val.value())),
-                (None, Some(callable)) => Ok(LoxObject::from(callable)),
+                (None, Some(callable)) => Ok(LoxObject::from(callable.bind(self))),
                 (None, None) => Err(LoxError::RuntimeError {
                     line: Some(method.line),
                     msg: format!("Undefined property {name}."),
