@@ -1,13 +1,12 @@
 use dashmap::DashMap;
 use either::Either;
-use environment::Environment;
 use lazy_static::lazy_static;
 
 use crate::{
     executor::environment::{self},
     syntax::{Expression, Statement},
     LoxError, LoxResult, Token,
-    TokenType::Identifier,
+    TokenType::{self, Identifier},
 };
 
 use super::{class::LoxClass, object::LoxObject, Executor};
@@ -18,7 +17,7 @@ use std::{
 };
 
 lazy_static! {
-    pub static ref THIS_KEY: u64 = environment::env_hash("THIS");
+    pub static ref THIS_KEY: u64 = environment::env_hash(format!("{:?}", TokenType::This).as_str());
 }
 
 #[derive(Debug)]
@@ -120,26 +119,18 @@ impl LoxCallable {
                 this,
                 ..
             } => {
-                let executor = if let Some(obj) = this.as_ref() {
-                    let environment = {
-                        let env = Environment::new_with_parent(Arc::clone(&executor.environment));
-
-                        env.values.insert(
+                if let Some(obj) = this.as_ref() {
+                    executor
+                        .environment
+                        .enclosing
+                        .as_ref()
+                        .unwrap()
+                        .values
+                        .insert(
                             *THIS_KEY,
                             environment::PackagedObject::Ready(Ok(LoxObject::from(obj))),
                         );
-
-                        Arc::new(env)
-                    };
-
-                    Executor {
-                        environment,
-                        workers: executor.workers,
-                        locals: Arc::clone(&executor.locals),
-                    }
-                } else {
-                    executor.clone()
-                };
+                }
 
                 loop {
                     if let Some(cache) = cache {

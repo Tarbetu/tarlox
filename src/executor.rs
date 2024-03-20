@@ -420,7 +420,7 @@ impl Executor {
                     }
                 } else {
                     Err(LoxError::InternalError(format!(
-                        "Unexcepted this at line {}",
+                        "Unexcepted 'this' at line {}",
                         name.line
                     )))
                 }

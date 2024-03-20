@@ -5,7 +5,7 @@ use crate::{
     executor::Executor,
     syntax::{Expression, Statement},
     LoxError::ParseError,
-    LoxResult, Token,
+    LoxResult, Token, TokenType,
 };
 
 #[derive(Clone, Copy)]
@@ -15,10 +15,17 @@ enum FunctionType {
     Method,
 }
 
+#[derive(Clone, Copy)]
+enum ClassType {
+    None,
+    Class,
+}
+
 pub struct Resolver<'a> {
     pub executor: &'a Executor,
     scopes: Vec<AHashMap<String, bool>>,
     current_function: FunctionType,
+    current_class: ClassType,
 }
 
 impl<'a> Resolver<'a> {
@@ -27,6 +34,7 @@ impl<'a> Resolver<'a> {
             executor,
             scopes: vec![],
             current_function: FunctionType::None,
+            current_class: ClassType::None,
         };
 
         result.begin_scope();
@@ -186,20 +194,23 @@ impl<'a> Resolver<'a> {
 
     fn class_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::Class(name, methods) = statement {
+            let enclosing_class = self.current_class;
+            self.current_class = ClassType::Class;
             self.declare(name)?;
             self.define(name);
 
             self.begin_scope();
             self.scopes
                 .last_mut()
-                .and_then(|scope| scope.insert("this".into(), true));
+                .and_then(|scope| scope.insert(format!("{:?}", TokenType::This), true));
 
             for method in methods {
                 let declaration = FunctionType::Method;
                 self.resolve_function(method, declaration)?
             }
-
             self.end_scope();
+
+            self.current_class = enclosing_class;
             Ok(())
         } else {
             unreachable!()
@@ -254,6 +265,21 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    fn this_expression(&mut self, expression: &Expression) -> LoxResult<()> {
+        if let Expression::This(keyword) = expression {
+            if let ClassType::None = self.current_class {
+                Err(ParseError {
+                    line: None,
+                    msg: "Can't use 'this' outside of a class.".into(),
+                })
+            } else {
+                self.resolve_local(expression, keyword)
+            }
+        } else {
+            unreachable!()
+        }
+    }
+
     fn while_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::While(condition, body) = statement {
             self.resolve_expression(condition)?;
@@ -302,14 +328,6 @@ impl<'a> Resolver<'a> {
         if let Expression::Set(object, _name, value) = expression {
             self.resolve_expression(value)?;
             self.resolve_expression(object)
-        } else {
-            unreachable!()
-        }
-    }
-
-    fn this_expression(&mut self, expression: &Expression) -> LoxResult<()> {
-        if let Expression::This(keyword) = expression {
-            self.resolve_local(expression, keyword)
         } else {
             unreachable!()
         }
