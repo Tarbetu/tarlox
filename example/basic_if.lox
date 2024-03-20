@@ -1,0 +1,7 @@
+var x = 10;
+
+if (x) {
+	print x;
+} else {
+	print "x is falsey";
+}

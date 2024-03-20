@@ -6,7 +6,7 @@ pub mod object;
 use ahash::AHashMap;
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
-use either::Either::{self, Left, Right};
+use either::Either::{Left, Right};
 use threadpool::ThreadPool;
 
 pub use crate::executor::callable::LoxCallable;
@@ -29,7 +29,7 @@ pub use environment::Environment;
 
 use std::sync::Arc;
 
-type LocalsMap = Arc<DashMap<String, usize, ahash::RandomState>>;
+type LocalsMap = Arc<DashMap<(usize, String), usize, ahash::RandomState>>;
 
 #[derive(Debug, Clone)]
 pub struct Executor {
@@ -47,18 +47,19 @@ impl Executor {
         }
     }
 
-    pub fn resolve(&self, expr: &Expression, depth: usize) {
-        self.locals.insert(expr.to_string(), depth);
+    pub fn resolve(&self, id: usize, expr: &Expression, depth: usize) {
+        self.locals.insert((id, expr.to_string()), depth);
     }
 
     pub fn lookup_variable(
         &self,
+        id: usize,
         key: &u64,
         expr: &Expression,
     ) -> Option<Ref<'_, u64, PackagedObject, ahash::RandomState>> {
         let value = self
             .locals
-            .get(&expr.to_string())
+            .get(&(id, expr.to_string()))
             .map(|distance| self.environment.get_at(*distance, key).unwrap());
 
         if value.is_some() {
@@ -190,6 +191,7 @@ impl Executor {
                                 Token {
                                     line: _,
                                     kind: TokenType::Identifier(method_name),
+                                    ..
                                 },
                                 params,
                                 body,
@@ -294,7 +296,8 @@ impl Executor {
             Variable(token) => {
                 if let Identifier(name) = &token.kind {
                     loop {
-                        let result = self.lookup_variable(&environment::env_hash(name), expr);
+                        let result =
+                            self.lookup_variable(token.id, &environment::env_hash(name), expr);
 
                         if let Some(pair) = result {
                             match pair.value() {
@@ -324,27 +327,11 @@ impl Executor {
             }
             Assign(name_tkn, value_expr) => {
                 if let Identifier(name) = &name_tkn.kind {
-                    let hash = environment::env_hash(name);
-                    if let Some((key, old_val)) = self.environment.remove(&hash) {
-                        let sub_env =
-                            Arc::new(Environment::new_with_parent(Arc::clone(&self.environment)));
-                        sub_env.values.insert(key, old_val);
+                    if let Some(distance) = self.locals.get(&(name_tkn.id, expr.to_string())) {
+                        let hash = environment::env_hash(name);
                         let val = self.clone().eval_expression(value_expr)?;
-                        if let Some(parent_env) = &self.environment.enclosing {
-                            environment::put_immediately(
-                                Arc::clone(parent_env),
-                                Arc::clone(&self.locals),
-                                name,
-                                Either::Right(LoxObject::from(&val)),
-                            );
-                        } else {
-                            environment::put_immediately(
-                                Arc::clone(&self.environment),
-                                Arc::clone(&self.locals),
-                                name,
-                                Either::Right(LoxObject::from(&val)),
-                            );
-                        }
+                        self.environment
+                            .assign_at(*distance, hash, LoxObject::from(&val));
 
                         Ok(val)
                     } else {
@@ -426,7 +413,7 @@ impl Executor {
                 }
             }
             This(name) => {
-                if let Some(pair) = self.lookup_variable(&callable::THIS_KEY, expr) {
+                if let Some(pair) = self.lookup_variable(name.id, &callable::THIS_KEY, expr) {
                     match pair.wait_for_value() {
                         Ok(val) => Ok(LoxObject::from(val)),
                         Err(e) => Err(e.into()),

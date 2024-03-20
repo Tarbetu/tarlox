@@ -5,7 +5,7 @@ use crate::{
     executor::Executor,
     syntax::{Expression, Statement},
     LoxError::ParseError,
-    LoxResult, Token, TokenType,
+    LoxResult, Token,
 };
 
 #[derive(Clone, Copy)]
@@ -226,14 +226,12 @@ impl<'a> Resolver<'a> {
 
     fn if_statement(&mut self, statement: &Statement) -> LoxResult<()> {
         if let Statement::If(condition, then_branch, else_branch) = statement {
-            self.begin_scope();
             self.resolve_expression(condition)?;
             self.resolve_statement(then_branch)?;
 
             if let Some(branch) = else_branch {
                 self.resolve_statement(branch)?;
             }
-            self.end_scope();
 
             Ok(())
         } else {
@@ -360,17 +358,15 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_local(&self, expression: &Expression, name: &Token) -> LoxResult<()> {
-        if let Some((index, _)) = self.scopes.iter().enumerate().rev().find(|(_, scope)| {
-            scope.contains_key(if let TokenType::Identifier(str) = &name.kind {
-                str.as_str()
-            } else if let TokenType::This = &name.kind {
-                "this"
-            } else {
-                unreachable!()
-            })
-        }) {
+        if let Some((index, _)) = self
+            .scopes
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, scope)| scope.contains_key(name.to_string().as_str()))
+        {
             self.executor
-                .resolve(expression, self.scopes.len() - 1 - index);
+                .resolve(name.id, expression, self.scopes.len() - 1 - index);
         }
 
         Ok(())
@@ -386,30 +382,25 @@ impl<'a> Resolver<'a> {
 
     fn declare(&mut self, name: &Token) -> LoxResult<()> {
         if let Some(scope) = self.scopes.last_mut() {
-            if let TokenType::Identifier(str) = &name.kind {
-                if scope.contains_key(str) {
-                    return Err(ParseError {
-                        line: Some(name.line),
-                        msg: "Already a variable with this name in this scope.".into(),
-                    });
-                } else {
-                    scope.insert(str.to_string(), false);
-                }
+            if scope.contains_key(name.to_string().as_str()) {
+                Err(ParseError {
+                    line: Some(name.line),
+                    msg: "Already a variable with this name in this scope.".into(),
+                })
             } else {
-                unreachable!()
+                scope.insert(name.to_string(), false);
+                Ok(())
             }
+        } else {
+            unreachable!()
         }
-
-        Ok(())
     }
 
     fn define(&mut self, name: &Token) {
         if let Some(scope) = self.scopes.last_mut() {
-            if let TokenType::Identifier(str) = &name.kind {
-                scope.insert(str.to_string(), true);
-            } else {
-                unreachable!()
-            }
+            scope.insert(name.to_string(), true);
+        } else {
+            unreachable!()
         }
     }
 }

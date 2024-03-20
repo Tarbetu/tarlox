@@ -2,6 +2,10 @@ class Counter {
 	increment() {
 		this.value = this.value + 1;
 	}
+
+	speak() {
+		print this;
+	}
 }
 
 var counter = Counter();

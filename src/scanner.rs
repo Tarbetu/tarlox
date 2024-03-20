@@ -41,10 +41,10 @@ impl<'a> Scanner<'a> {
         }
 
         if self.tokens.is_ok() {
-            self.tokens.as_mut().unwrap().push(Token {
-                kind: TokenType::EOF,
-                line: self.line,
-            });
+            self.tokens
+                .as_mut()
+                .unwrap()
+                .push(Token::new(TokenType::EOF, self.line));
         }
 
         self.tokens
@@ -137,10 +137,7 @@ impl<'a> Scanner<'a> {
 
     fn add_token(&mut self, kind: TokenType) {
         if let Ok(tokens) = &mut self.tokens {
-            tokens.push(Token {
-                kind,
-                line: self.line,
-            })
+            tokens.push(Token::new(kind, self.line))
         }
     }
 
