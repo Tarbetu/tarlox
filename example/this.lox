@@ -1,4 +1,8 @@
 class Counter {
+	init() {
+		this.value = 0;
+	}
+
 	increment() {
 		this.value = this.value + 1;
 	}
@@ -9,7 +13,6 @@ class Counter {
 }
 
 var counter = Counter();
-counter.value = 0;
 
 print counter.value;
 counter.increment();

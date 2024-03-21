@@ -28,6 +28,7 @@ pub enum LoxCallable {
         body: Arc<Statement>,
         cache: Option<DashMap<Vec<String>, LoxObject, ahash::RandomState>>,
         this: Option<LoxObject>,
+        is_initializer: bool,
     },
     NativeFunction {
         arity: usize,
@@ -46,6 +47,7 @@ impl LoxCallable {
             body,
             cache: Some(DashMap::with_hasher(ahash::RandomState::new())),
             this: None,
+            is_initializer: false,
         }
     }
 
@@ -54,6 +56,7 @@ impl LoxCallable {
         body: Arc<Statement>,
         id: u64,
         this: Option<LoxObject>,
+        is_initializer: bool,
     ) -> Self {
         Self::Function {
             id,
@@ -61,22 +64,31 @@ impl LoxCallable {
             body,
             cache: Some(DashMap::with_hasher(ahash::RandomState::new())),
             this,
+            is_initializer,
         }
     }
 
-    pub fn new_method(parameters: Arc<Vec<Token>>, body: Arc<Statement>) -> Self {
+    pub fn new_method(
+        parameters: Arc<Vec<Token>>,
+        body: Arc<Statement>,
+        is_initializer: bool,
+    ) -> Self {
         Self::Function {
             id: rand::random(),
             parameters,
             body,
             cache: None,
             this: None,
+            is_initializer,
         }
     }
 
     pub fn bind(&self, this: &LoxObject) -> Self {
         if let LoxCallable::Function {
-            parameters, body, ..
+            parameters,
+            body,
+            is_initializer,
+            ..
         } = self
         {
             LoxCallable::Function {
@@ -85,6 +97,7 @@ impl LoxCallable {
                 body: Arc::clone(body),
                 cache: None,
                 this: Some(LoxObject::from(this)),
+                is_initializer: *is_initializer,
             }
         } else {
             unreachable!()
@@ -97,7 +110,10 @@ impl LoxCallable {
         match self {
             Function { parameters, .. } => parameters.len(),
             NativeFunction { arity, .. } => *arity,
-            Class { .. } => 0,
+            Class { class } => match class.find_method("init") {
+                None => 0,
+                Some(callable) => callable.arity(),
+            },
         }
     }
 
@@ -215,11 +231,19 @@ impl LoxCallable {
                 }
             }
             NativeFunction { fun, .. } => fun(arguments),
-            Class { class } => Ok(LoxObject::Instance(
-                rand::random(),
-                Arc::clone(class),
-                Arc::new(DashMap::with_hasher(ahash::RandomState::new())),
-            )),
+            Class { class } => {
+                let instance = LoxObject::Instance(
+                    rand::random(),
+                    Arc::clone(class),
+                    Arc::new(DashMap::with_hasher(ahash::RandomState::new())),
+                );
+
+                class
+                    .find_method("init")
+                    .map(|initializer| initializer.bind(&instance).call(executor, arguments));
+
+                Ok(instance)
+            }
         }
     }
 }
@@ -234,11 +258,13 @@ impl From<&LoxCallable> for LoxCallable {
                 body,
                 cache: _,
                 this,
+                is_initializer,
             } => LoxCallable::new_with_id(
                 Arc::clone(parameters),
                 Arc::clone(body),
                 *id,
                 this.as_ref().map(LoxObject::from),
+                *is_initializer,
             ),
             NativeFunction { arity, fun } => LoxCallable::NativeFunction {
                 arity: *arity,

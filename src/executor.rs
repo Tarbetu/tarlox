@@ -203,6 +203,7 @@ impl Executor {
                                     LoxCallable::new_method(
                                         Arc::new(params.to_owned()),
                                         Arc::clone(body),
+                                        method_name == "init",
                                     ),
                                 );
                             } else {
