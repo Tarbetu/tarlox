@@ -13,6 +13,7 @@ enum FunctionType {
     None,
     Function,
     Method,
+    Initializer,
 }
 
 #[derive(Clone, Copy)]
@@ -205,7 +206,21 @@ impl<'a> Resolver<'a> {
                 .and_then(|scope| scope.insert(format!("{:?}", TokenType::This), true));
 
             for method in methods {
-                let declaration = FunctionType::Method;
+                let mut declaration = FunctionType::Method;
+
+                if let Statement::Function(
+                    Token {
+                        kind: TokenType::Identifier(name),
+                        ..
+                    },
+                    ..,
+                ) = method
+                {
+                    if name == "init" {
+                        declaration = FunctionType::Initializer;
+                    }
+                }
+
                 self.resolve_function(method, declaration)?
             }
             self.end_scope();
@@ -257,11 +272,16 @@ impl<'a> Resolver<'a> {
                     line: None,
                     msg: "Can't return from top-level code.".into(),
                 })
+            } else if let FunctionType::Initializer = self.current_function {
+                Err(ParseError {
+                    line: None,
+                    msg: "Can't return inside from initializer".into(),
+                })
             } else {
                 self.resolve_expression(expr)
             }
         } else {
-            unreachable!()
+            Ok(())
         }
     }
 

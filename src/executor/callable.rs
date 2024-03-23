@@ -133,6 +133,7 @@ impl LoxCallable {
                 body,
                 cache,
                 this,
+                is_initializer,
                 ..
             } => {
                 if let Some(obj) = this.as_ref() {
@@ -180,6 +181,7 @@ impl LoxCallable {
                                     locals: Arc::clone(&executor.locals),
                                     workers: executor.workers,
                                 };
+
                                 let val =
                                 // This seems like a mess. Everywhere is filled with eval_expression!
                                 if let Expression::Call(callee, _paren, uneval_inner_arguments) = expr.as_ref() {
@@ -224,7 +226,13 @@ impl LoxCallable {
                                 Ok(val)
                             }
                         },
-                        error => error.map(|_| LoxObject::Nil),
+                        error => {
+                            if *is_initializer {
+                                return Ok(LoxObject::from(this.as_ref().unwrap()));
+                            } else {
+                                error.map(|_| LoxObject::Nil)
+                            }
+                        }
                     };
 
                     return result;
