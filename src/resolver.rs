@@ -20,6 +20,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    Subclass,
 }
 
 pub struct Resolver<'a> {
@@ -213,6 +214,7 @@ impl<'a> Resolver<'a> {
             }
 
             if let Some(superclass) = superclass {
+                self.current_class = ClassType::Subclass;
                 self.resolve_expression(superclass)?;
                 self.scopes
                     .last_mut()
@@ -321,7 +323,19 @@ impl<'a> Resolver<'a> {
 
     fn super_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Super(keyword, _) = expression {
-            self.resolve_local(expression, keyword)
+            if let ClassType::None = self.current_class {
+                Err(ParseError {
+                    line: Some(keyword.line),
+                    msg: "Can't use 'super' outside of a class.".into(),
+                })
+            } else if let ClassType::Subclass = self.current_class {
+                Err(ParseError {
+                    line: Some(keyword.line),
+                    msg: "Can't use 'super' with no superclass.".into(),
+                })
+            } else {
+                self.resolve_local(expression, keyword)
+            }
         } else {
             unreachable!()
         }
