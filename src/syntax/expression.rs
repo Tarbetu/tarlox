@@ -20,6 +20,7 @@ pub enum Expression {
     Get(Box<Expression>, Token),
     Set(Box<Expression>, Token, Box<Expression>),
     This(Token),
+    Super(Token, Token),
 }
 
 impl Display for Expression {
@@ -62,6 +63,9 @@ impl Display for Expression {
             }
             This(..) => {
                 write!(f, "(this)")
+            }
+            Super(_keyword, method) => {
+                write!(f, "(super.{method})")
             }
         }
     }

@@ -17,8 +17,8 @@ pub enum Statement {
     //        Name     Params      Body
     Function(Token, Vec<Token>, Arc<Statement>),
     Return(Option<Arc<Expression>>),
-    //    Name       Methods
-    Class(Token, Vec<Statement>),
+    //    Name    Subclass       Methods
+    Class(Token, Option<Arc<Expression>>, Vec<Statement>),
 }
 
 impl Hash for Statement {

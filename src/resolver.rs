@@ -83,6 +83,7 @@ impl<'a> Resolver<'a> {
             Get(..) => self.get_expression(expression),
             Set(..) => self.set_expression(expression),
             This(..) => self.this_expression(expression),
+            Super(..) => self.super_expression(expression),
             Literal(..) => Ok(()),
         }
     }
@@ -194,11 +195,29 @@ impl<'a> Resolver<'a> {
     }
 
     fn class_statement(&mut self, statement: &Statement) -> LoxResult<()> {
-        if let Statement::Class(name, methods) = statement {
+        if let Statement::Class(name, superclass, methods) = statement {
             let enclosing_class = self.current_class;
             self.current_class = ClassType::Class;
             self.declare(name)?;
             self.define(name);
+
+            if let Some(Expression::Variable(superclass_name)) =
+                superclass.as_ref().map(|arc| arc.as_ref())
+            {
+                if name.to_string() == superclass_name.to_string() {
+                    return Err(ParseError {
+                        line: Some(superclass_name.line),
+                        msg: "A class can't inherit from itself.".into(),
+                    });
+                }
+            }
+
+            if let Some(superclass) = superclass {
+                self.resolve_expression(superclass)?;
+                self.scopes
+                    .last_mut()
+                    .and_then(|scope| scope.insert(format!("{:?}", TokenType::Super), true));
+            }
 
             self.begin_scope();
             self.scopes
@@ -295,6 +314,14 @@ impl<'a> Resolver<'a> {
             } else {
                 self.resolve_local(expression, keyword)
             }
+        } else {
+            unreachable!()
+        }
+    }
+
+    fn super_expression(&mut self, expression: &Expression) -> LoxResult<()> {
+        if let Expression::Super(keyword, _) = expression {
+            self.resolve_local(expression, keyword)
         } else {
             unreachable!()
         }

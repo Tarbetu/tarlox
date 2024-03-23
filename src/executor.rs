@@ -10,6 +10,7 @@ use either::Either::{Left, Right};
 use threadpool::ThreadPool;
 
 pub use crate::executor::callable::LoxCallable;
+use crate::executor::callable::THIS_KEY;
 use crate::executor::class::LoxClass;
 use crate::Token;
 use crate::GLOBALS;
@@ -181,8 +182,29 @@ impl Executor {
                 Arc::clone(&self.environment),
                 maybe_expr.as_ref().map(Arc::clone),
             )),
-            Class(name, methods) => {
-                if let TokenType::Identifier(name) = &name.kind {
+            Class(class_name, superclass_expr, methods) => {
+                if let TokenType::Identifier(name) = &class_name.kind {
+                    let mut superclass = None;
+
+                    if let Some(superclass_expr) = superclass_expr {
+                        match self.eval_expression(superclass_expr) {
+                            Ok(LoxObject::Callable(callable)) => {
+                                if let LoxCallable::Class { class } = callable.as_ref() {
+                                    superclass = Some(Arc::clone(class));
+                                } else {
+                                    return Err(LoxError::RuntimeError {
+                                        line: Some(class_name.line),
+                                        msg: format!(
+                                            "{:?} is not a class but a callable, can not be inherited",
+                                            superclass
+                                        ),
+                                    });
+                                }
+                            }
+                            error => return error.map(|_| ()),
+                        }
+                    }
+
                     let methods = {
                         let mut result = AHashMap::new();
 
@@ -219,14 +241,14 @@ impl Executor {
                         Arc::clone(&self.locals),
                         name,
                         Right(LoxObject::from(LoxCallable::Class {
-                            class: Arc::new(LoxClass::new(name.to_string(), methods)),
+                            class: Arc::new(LoxClass::new(name.to_string(), superclass, methods)),
                         })),
                     );
 
                     Ok(())
                 } else {
                     Err(LoxError::ParseError {
-                        line: Some(name.line),
+                        line: Some(class_name.line),
                         msg: String::from("Invalid name specified in function statement!"),
                     })
                 }
@@ -424,6 +446,38 @@ impl Executor {
                         "Unexcepted 'this' at line {}",
                         name.line
                     )))
+                }
+            }
+            Super(_keyword, method) => {
+                let this = self.environment.get(&THIS_KEY).unwrap();
+                let this = this.wait_for_value().as_ref().unwrap();
+
+                if let (LoxObject::Instance(_, class, ..), TokenType::Identifier(method_name)) =
+                    (this, &method.kind)
+                {
+                    let mut class = class;
+
+                    let mut result = None;
+
+                    while let Some(superclass) = &class.superclass {
+                        if let Some(method) = superclass.find_method(method_name) {
+                            result = Some(LoxObject::Callable(Arc::new(method.bind(this))));
+                            break;
+                        } else {
+                            class = superclass;
+                        }
+                    }
+
+                    if let Some(obj) = result {
+                        Ok(obj)
+                    } else {
+                        Err(LoxError::RuntimeError {
+                            line: Some(method.line),
+                            msg: format!("Undefined property {}.", method_name),
+                        })
+                    }
+                } else {
+                    unreachable!()
                 }
             }
         }

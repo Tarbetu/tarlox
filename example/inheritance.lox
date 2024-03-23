@@ -1,0 +1,36 @@
+class Human {
+	init(name) {
+		this.name = name;
+	}
+
+	speak() {
+		print "Hello! My name is " + this.name;
+	}
+
+	run() {
+		print "*runs*";
+	}
+}
+
+class Tarbetu < Human {
+	init() {
+		this.name = "Tarbetu";
+	}
+
+	speak() {
+		super.speak();
+		print "Do you know that I have my own programming language!?";
+	}
+
+	run() {
+		print "*runs slower*";
+	}
+}
+
+var basic_human = Human("Bashar");
+basic_human.speak();
+basic_human.run();
+
+var basic_tarbetu = Tarbetu();
+basic_tarbetu.speak();
+basic_tarbetu.run();
