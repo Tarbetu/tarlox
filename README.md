@@ -143,7 +143,7 @@ lambda(x) { print x * 2; }(4);
 
 It's odd, I know.
 
-### Tail Call Optimization is only triggered when the return statement is a call statement.
+### Tail Call Optimization is only triggered when the return expression is a call.
 
 This won't be counted as a tail call:
 
@@ -152,7 +152,7 @@ fun factorial(acc, n) {
 	if (n < 2) {
 		return acc;
 	}
-  var x = factorial(acc * n, n - 1);
+	var x = factorial(acc * n, n - 1);
 	return x;
 }
 ```
