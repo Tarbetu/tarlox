@@ -1,6 +1,0 @@
-// Wip: Currying is not implemented yet
-fun multiply(x) {
-    return lambda(y) { return x * y; };
-}
-
-print multiply(333)(2);

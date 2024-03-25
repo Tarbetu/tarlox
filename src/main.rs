@@ -34,8 +34,7 @@ lazy_static! {
     static ref GLOBALS: Arc<Environment> = standard::globals();
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let mut args = env::args();
 
     use std::cmp::Ordering::*;
@@ -62,11 +61,11 @@ async fn main() {
 
             process::exit(0);
         }
-        Less => run_prompt().await,
+        Less => run_prompt(),
     }
 }
 
-async fn run_prompt() {
+fn run_prompt() {
     let exe = Executor::new(&WORKERS);
     let mut resolver = Resolver::new(&exe);
 

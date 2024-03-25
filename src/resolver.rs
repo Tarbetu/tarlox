@@ -328,12 +328,13 @@ impl<'a> Resolver<'a> {
                     line: Some(keyword.line),
                     msg: "Can't use 'super' outside of a class.".into(),
                 })
-            } else if let ClassType::Subclass = self.current_class {
-                Err(ParseError {
-                    line: Some(keyword.line),
-                    msg: "Can't use 'super' with no superclass.".into(),
-                })
             } else {
+                let ClassType::Subclass = self.current_class else {
+                    return Err(ParseError {
+                        line: Some(keyword.line),
+                        msg: "Can't use 'super' with no superclass.".into(),
+                    });
+                };
                 self.resolve_local(expression, keyword)
             }
         } else {
@@ -423,12 +424,19 @@ impl<'a> Resolver<'a> {
 
     fn lambda_expression(&mut self, expression: &Expression) -> LoxResult<()> {
         if let Expression::Lambda(params, body) = expression {
+            let enclosing_function = self.current_function;
+            self.current_function = FunctionType::Function;
+
+            self.begin_scope();
+
             for i in params {
                 self.declare(i)?;
                 self.define(i);
             }
-
             self.resolve_statement(body)?;
+            self.end_scope();
+
+            self.current_function = enclosing_function;
 
             Ok(())
         } else {

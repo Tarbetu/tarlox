@@ -1,0 +1,16 @@
+fun f1() {
+	return 666 * 333 / 2;
+}
+
+fun f2(x) {
+	return x * 999;
+}
+
+var x = f1();
+print "The varible x is calculating, as main thread goes on.";
+var y = f2(x);
+print "The varible y will be calculating after x is calculated.";
+
+print "Blocking main thread until y is ready";
+print("y = " + y);
+
