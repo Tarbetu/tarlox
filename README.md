@@ -132,7 +132,7 @@ Like other functions, memoization will work in the same scope.
 
 ### About Paralelism
 
-Sometimes the program goes into a deadlock while playing around with variables. The behaviour is not consistent, so I can't reproduce and it's not common, and the interpreter may execute the same code without no issue.
+Sometimes the program goes into a deadlock while playing around with variables. The behaviour is not consistent, so I can't reproduce. It's not common, and the interpreter may execute the same code without no issue.
 
 ### Direct call on Lambda
 
