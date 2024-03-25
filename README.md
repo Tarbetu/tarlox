@@ -68,7 +68,7 @@ To avoid this behaviour, you can declare your variables with `await_var`.
 await_var x = a_function_that_took_seconds();  
 // Thread is blocked until x is ready.
 print x;
-// No blocking, because x is calculated.
+// No blocking, because x has been calculated.
 ```
 
 ### Function Return Value Memoization
