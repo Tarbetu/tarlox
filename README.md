@@ -241,7 +241,7 @@ cargo run -- example/tail_call.lox
 You can install "Tarbetu's Lox" to your system like this:
 
 ```
-cargo install --path.
+cargo install --path .
 ```
 
 The executable will be available in your `$PATH`, you can call the interpreter like this:
