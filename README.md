@@ -82,7 +82,7 @@ if (is_ready x) {
 
 ### Function Return Value Memoization
 
-If a function is called with the same arguments, the function will quickly return the value which is cached before unless executing the main thread.
+If a function is called with the same arguments, the function will quickly return the value which is cached before unless executing the function body.
 
 ```
 fun power_of_two(x) {
