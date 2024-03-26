@@ -71,6 +71,15 @@ print x;
 // No blocking, because x has been calculated.
 ```
 
+You might check the variable if it's ready; this can be done with `is_ready` operator:
+
+```
+var x = a_function_that_took_seconds();
+if (is_ready x) {
+	print "x is ready. Here is your x: " = x
+};
+```
+
 ### Function Return Value Memoization
 
 If a function is called with the same arguments, the function will quickly return the value which is cached before unless executing the main thread.
