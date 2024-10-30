@@ -262,5 +262,5 @@ tarlox my_script.lox
 To remove:
 
 ```
-cargo unistall tarlox
+cargo uninstall tarlox
 ```
