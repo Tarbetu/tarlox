@@ -214,14 +214,14 @@ Since methods don't do memoization while nested functions do, there will be no m
 
 ## Wishlist
 
-To be honest, I don't have lots of free time to implement this but I would like to do them in my free time. If you implement this for me, you will get a place in my heart.
+To be honest, I don't have lots of free time to implement these but I would like to do them in my free time. If you implement this for me, you will get a place in my heart.
 
 - Direct call on Lambda and environment capturing
 - Changing `await_var x = 0;` as `await var x = 0;`.
 - Importing mechanism
 - A good standard library
 - Arrays and Hashmap
-- And iterator protocol and for-each syntax
+- An iterator protocol and for-each syntax
 - Implementing module and bitwise operators
 - Better approach for storing variables to avoid deadlocks
 - A decent GC for preventing memory leaks of memoization
