@@ -76,8 +76,8 @@ You might check the variable if it's ready; this can be done with `is_ready` ope
 ```
 var x = a_function_that_took_seconds();
 if (is_ready x) {
-	print "x is ready. Here is your x: " = x
-};
+	print "x is ready. Here is your x: " + x;
+}
 ```
 
 ### Function Return Value Memoization
