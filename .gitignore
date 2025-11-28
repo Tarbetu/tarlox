@@ -1,4 +1,4 @@
 /target
 flake.lock
-cargo.lock
+Cargo.lock
 /.direnv
