@@ -1,1 +1,4 @@
 /target
+flake.lock
+cargo.lock
+/.direnv
