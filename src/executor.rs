@@ -327,7 +327,7 @@ impl Executor {
                                 PackagedObject::Pending(mtx, cvar) => {
                                     let lock = mtx.lock().unwrap();
 
-                                    let _ = cvar.wait_while(lock, |pending| !*pending);
+                                    let _condvar = cvar.wait_while(lock, |pending| !*pending);
                                 }
                                 PackagedObject::Ready(res) => match res {
                                     Ok(obj) => return Ok(LoxObject::from(obj)),

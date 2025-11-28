@@ -22,7 +22,7 @@ impl PackagedObject {
             Self::Pending(mtx, cvar) => {
                 let res = mtx.lock().unwrap();
 
-                let _ = cvar.wait_while(res, |pending| !*pending);
+                let _condvar = cvar.wait_while(res, |pending| !*pending);
                 self.wait_for_value()
             }
             Self::Ready(val) => val,
