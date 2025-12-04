@@ -9,9 +9,12 @@ fun factorial(x) {
 	return factorial(1, x);
 }
 
-print clock();
-var x = factorial(666);
-var y = factorial(1300);
-print("factorial(666) = " + x);
-print("factorial(1300) = " + y);
-print clock();
+await_var begin = clock_millis();
+var x = factorial(42);
+var y = factorial(420);
+await_var awaited_x = x;
+await_var awaited_y = y;
+await_var end = clock_millis();
+print("factorial(42) = " + x);
+print("factorial(420) = " + y);
+print "It tooks " + (end - begin) + " milliseconds!";

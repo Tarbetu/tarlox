@@ -1,0 +1,11 @@
+use chrono::Utc;
+use rug::Float;
+
+use crate::{executor::LoxObject, LoxResult, NUMBER_PREC};
+
+pub fn clock_millis(_: Vec<LoxObject>) -> LoxResult<LoxObject> {
+    Ok(LoxObject::from(Float::with_val(
+        NUMBER_PREC,
+        Utc::now().timestamp_millis(),
+    )))
+}

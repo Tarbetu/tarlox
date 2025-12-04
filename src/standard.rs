@@ -1,4 +1,5 @@
 mod clock;
+mod clock_millis;
 
 use crate::executor::{environment, Environment, LoxCallable, LoxObject};
 use std::sync::Arc;
@@ -25,6 +26,7 @@ pub fn globals() -> Arc<Environment> {
     let locals = Arc::new(DashMap::with_hasher(ahash::RandomState::new()));
 
     make_function!(env, locals, 0, clock);
+    make_function!(env, locals, 0, clock_millis);
 
     env
 }
