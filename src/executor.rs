@@ -163,7 +163,11 @@ impl Executor {
             }
             Function(name, params, body) => {
                 if let TokenType::Identifier(name) = &name.kind {
-                    let fun = LoxCallable::new(Arc::new(params.to_owned()), Arc::clone(body));
+                    let fun = LoxCallable::new(
+                        Arc::new(params.to_owned()),
+                        Arc::clone(body),
+                        Arc::clone(&self.environment),
+                    );
                     environment::put_immediately(
                         Arc::clone(&self.environment),
                         Arc::clone(&self.locals),
@@ -226,6 +230,7 @@ impl Executor {
                                         Arc::new(params.to_owned()),
                                         Arc::clone(body),
                                         method_name == "init",
+                                        Arc::clone(&self.environment),
                                     ),
                                 );
                             } else {
@@ -387,6 +392,16 @@ impl Executor {
                 let callee = self.clone().eval_expression(callee)?;
 
                 if let LoxObject::Callable(callee) = callee {
+                    let environment = Arc::clone(match callee.as_ref() {
+                        LoxCallable::Function { closure, .. } => closure,
+                        _ => &self.environment,
+                    });
+                    let sub_executor = Executor {
+                        workers: &WORKERS,
+                        environment: Arc::new(Environment::new_with_parent(environment)),
+                        locals: Arc::clone(&self.locals),
+                    };
+
                     let arguments = {
                         let mut res = vec![];
 
@@ -395,14 +410,6 @@ impl Executor {
                         }
 
                         res
-                    };
-
-                    let sub_executor = Executor {
-                        workers: &WORKERS,
-                        environment: Arc::new(Environment::new_with_parent(Arc::clone(
-                            &self.environment,
-                        ))),
-                        locals: Arc::clone(&self.locals),
                     };
 
                     callee.call(&sub_executor, arguments)
@@ -416,6 +423,7 @@ impl Executor {
             Lambda(params, body) => Ok(LoxObject::from(LoxCallable::new(
                 Arc::new(params.to_owned()),
                 Arc::clone(body),
+                Arc::clone(&self.environment),
             ))),
             Get(object, name) => {
                 let object = self.eval_expression(object)?;

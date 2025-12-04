@@ -3,7 +3,7 @@ use either::Either;
 use lazy_static::lazy_static;
 
 use crate::{
-    executor::environment::{self},
+    executor::environment::{self, Environment},
     syntax::{Expression, Statement},
     LoxError, LoxResult, Token,
     TokenType::{self, Identifier},
@@ -29,6 +29,7 @@ pub enum LoxCallable {
         cache: Option<DashMap<Vec<String>, LoxObject, ahash::RandomState>>,
         this: Option<LoxObject>,
         is_initializer: bool,
+        closure: Arc<Environment>,
     },
     NativeFunction {
         arity: usize,
@@ -40,7 +41,11 @@ pub enum LoxCallable {
 }
 
 impl LoxCallable {
-    pub fn new(parameters: Arc<Vec<Token>>, body: Arc<Statement>) -> Self {
+    pub fn new(
+        parameters: Arc<Vec<Token>>,
+        body: Arc<Statement>,
+        closure: Arc<Environment>,
+    ) -> Self {
         Self::Function {
             id: rand::random(),
             parameters,
@@ -48,6 +53,7 @@ impl LoxCallable {
             cache: Some(DashMap::with_hasher(ahash::RandomState::new())),
             this: None,
             is_initializer: false,
+            closure,
         }
     }
 
@@ -57,6 +63,7 @@ impl LoxCallable {
         id: u64,
         this: Option<LoxObject>,
         is_initializer: bool,
+        closure: Arc<Environment>,
     ) -> Self {
         Self::Function {
             id,
@@ -65,6 +72,7 @@ impl LoxCallable {
             cache: Some(DashMap::with_hasher(ahash::RandomState::new())),
             this,
             is_initializer,
+            closure,
         }
     }
 
@@ -72,6 +80,7 @@ impl LoxCallable {
         parameters: Arc<Vec<Token>>,
         body: Arc<Statement>,
         is_initializer: bool,
+        closure: Arc<Environment>,
     ) -> Self {
         Self::Function {
             id: rand::random(),
@@ -80,6 +89,7 @@ impl LoxCallable {
             cache: None,
             this: None,
             is_initializer,
+            closure,
         }
     }
 
@@ -88,6 +98,7 @@ impl LoxCallable {
             parameters,
             body,
             is_initializer,
+            closure,
             ..
         } = self
         {
@@ -98,6 +109,7 @@ impl LoxCallable {
                 cache: None,
                 this: Some(LoxObject::from(this)),
                 is_initializer: *is_initializer,
+                closure: Arc::clone(closure),
             }
         } else {
             unreachable!()
@@ -267,12 +279,14 @@ impl From<&LoxCallable> for LoxCallable {
                 cache: _,
                 this,
                 is_initializer,
+                closure,
             } => LoxCallable::new_with_id(
                 Arc::clone(parameters),
                 Arc::clone(body),
                 *id,
                 this.as_ref().map(LoxObject::from),
                 *is_initializer,
+                Arc::clone(closure),
             ),
             NativeFunction { arity, fun } => LoxCallable::NativeFunction {
                 arity: *arity,
